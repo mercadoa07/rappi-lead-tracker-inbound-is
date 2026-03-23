@@ -1,0 +1,16 @@
+-- ════════════════════════════════════════════════════════════
+-- Seed — rappi-lead-tracker-inbound
+-- IMPORTANTE: Primero crea el usuario en Supabase Auth Dashboard,
+-- luego copia el UUID aquí.
+-- ════════════════════════════════════════════════════════════
+
+-- Ejemplo: insertar perfil ADMIN (reemplaza el UUID con el real de Auth)
+-- insert into profiles (id, email, full_name, role, country, team)
+-- values (
+--   'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+--   'admin@rappi.com',
+--   'Admin Inbound',
+--   'ADMIN',
+--   'CO',
+--   'SOB'
+-- );
