@@ -14,9 +14,9 @@ create table if not exists reassignments (
   reassigned_at    timestamptz default now()
 );
 
-create index if not exists on reassignments(lead_id);
-create index if not exists on reassignments(to_user_id);
-create index if not exists on reassignments(from_user_id);
+create index if not exists idx_reassignments_lead_id      on reassignments(lead_id);
+create index if not exists idx_reassignments_to_user_id   on reassignments(to_user_id);
+create index if not exists idx_reassignments_from_user_id on reassignments(from_user_id);
 
 -- ─── 2. Campo reassignment_count en leads ────────────────────────────────────
 

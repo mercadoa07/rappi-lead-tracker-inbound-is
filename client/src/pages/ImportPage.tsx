@@ -108,7 +108,7 @@ function sheetRowsToLeads(
     const rowNum = idx + 2
 
     // ── ID ──
-    const leadId = getCol(row, 'LEAD_ID', 'LEAD ID', 'lead_id', 'lead id', 'external_id')
+    const leadId = getCol(row, 'LEAD_ID', 'LEAD ID', 'lead_id', 'lead id', 'external_id', 'LEAD', 'lead')
     if (!leadId) {
       errors.push({ row: rowNum, sheet: sheetName, message: 'Sin LEAD_ID' })
       return
@@ -116,8 +116,8 @@ function sheetRowsToLeads(
 
     // ── Name: SDR=BRAND, SOB=NAME ──
     const name = source === 'SOB'
-      ? getCol(row, 'NAME', 'NOMBRE', 'name', 'nombre', 'BRAND')
-      : getCol(row, 'BRAND', 'NOMBRE', 'brand', 'nombre', 'NAME')
+      ? getCol(row, 'NAME', 'NOMBRE', 'name', 'nombre', 'BRAND', 'BRAND_NAME', 'brand_name')
+      : getCol(row, 'BRAND', 'NOMBRE', 'brand', 'nombre', 'NAME', 'BRAND_NAME', 'brand_name')
     if (!name) {
       errors.push({ row: rowNum, sheet: sheetName, message: 'Sin nombre (BRAND/NAME)' })
       return
@@ -142,11 +142,11 @@ function sheetRowsToLeads(
       : 'SIN_CONTACTO'
 
     // ── Dates ──
-    const fechaAsignacion = parseSheetDate(getCol(row, 'FECHA_ASIGNACION', 'FECHA ASIGNACION', 'fecha_asignacion'))
+    const fechaAsignacion = parseSheetDate(getCol(row, 'FECHA_ASIGNACION', 'FECHA ASIGNACION', 'fecha_asignacion', 'START_DATE_TIME', 'start_date_time'))
     const fechaEstado     = parseSheetDate(getCol(row, 'FECHA_ESTADO', 'FECHA ESTADO', 'fecha_estado'))
 
     // ── Phone ──
-    const phone1 = cleanPhone(getCol(row, 'NUMERO_1', 'NUMERO 1', 'numero_1', 'phone1', 'tel1'))
+    const phone1 = cleanPhone(getCol(row, 'NUMERO_1', 'NUMERO 1', 'numero_1', 'phone1', 'tel1', 'TELEFONO', 'telefono'))
     const phone2 = cleanPhone(getCol(row, 'NUMERO_2', 'NUMERO 2', 'numero_2', 'phone2', 'tel2'))
 
     // ── Contact attempts (CONTACTO_1/2/3) ──
