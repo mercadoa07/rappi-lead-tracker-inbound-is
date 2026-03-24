@@ -142,7 +142,10 @@ function sheetRowsToLeads(
       : 'SIN_CONTACTO'
 
     // ── Dates ──
-    const fechaAsignacion = parseSheetDate(getCol(row, 'FECHA_ASIGNACION', 'FECHA ASIGNACION', 'fecha_asignacion', 'START_DATE_TIME', 'start_date_time'))
+    // fechaAsignacion = cuando el líder asigna el lead al hunter (no viene del archivo)
+    // semanaLead      = cuando llegó el lead al sistema (START_DATE_TIME en SOB)
+    const fechaAsignacion = parseSheetDate(getCol(row, 'FECHA_ASIGNACION', 'FECHA ASIGNACION', 'fecha_asignacion'))
+    const semanaLead      = parseSheetDate(getCol(row, 'START_DATE_TIME', 'start_date_time', 'SEMANA_LEAD', 'semana_lead'))
     const fechaEstado     = parseSheetDate(getCol(row, 'FECHA_ESTADO', 'FECHA ESTADO', 'fecha_estado'))
 
     // ── Phone ──
@@ -214,11 +217,12 @@ function sheetRowsToLeads(
       external_store_id:      getCol(row, 'External_Store_Id', 'EXTERNAL_STORE_ID', 'external_store_id') ?? null,
       tyc,
       assigned_to_id:         assignedToId,
-      assigned_at:            fechaAsignacion ?? now,
+      assigned_at:            now,
       current_stage:          currentStage,
       stage_changed_at:       now,
       fecha_estado:           fechaEstado ?? null,
-      week_assigned:          fechaAsignacion ?? now,
+      week_assigned:          now,
+      semana_lead:            semanaLead ?? null,
       tiene_intento_contacto:  tieneIntentoContacto,
       tiene_contacto_efectivo: tieneContactoEfectivo,
       bloqueado,
