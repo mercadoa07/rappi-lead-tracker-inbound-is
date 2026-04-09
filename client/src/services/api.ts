@@ -5,6 +5,7 @@ import type {
   Lead, ContactAttempt, StageHistory, Alert, FunnelStage,
   ContactResult, Country, LeadSource, User, Reassignment,
   TeamSummaryResponse, ClosedRateEntry, HcSummaryEntry,
+  FunnelEntry, StageAdvanceEntry, DiscardReasonEntry,
 } from '../types'
 
 // ─── Phone cleaner ────────────────────────────────────────────────────────────
@@ -433,19 +434,91 @@ export const reportsApi = {
   },
 
   getTeamSummary: async (
-    period:  string,
-    date:    string,
-    country?: string,
-    source?:  LeadSource,
+    period:    string,
+    date:      string,
+    country?:  string,
+    source?:   LeadSource,
+    hunterId?: string,
+    leaderId?: string,
+    dateFrom?: string,
+    dateTo?:   string,
   ): Promise<TeamSummaryResponse> => {
     const { data, error } = await supabase.rpc('get_team_summary', {
-      p_period:  period,
-      p_date:    date,
-      p_country: country ?? null,
-      p_source:  source  ?? null,
+      p_period:    period,
+      p_date:      date,
+      p_country:   country  ?? null,
+      p_source:    source   ?? null,
+      p_hunter_id: hunterId ?? null,
+      p_leader_id: leaderId ?? null,
+      p_date_from: dateFrom ?? null,
+      p_date_to:   dateTo   ?? null,
     })
     if (error) throw error
     return data as TeamSummaryResponse
+  },
+
+  getFunnelDistribution: async (
+    country?:  string,
+    source?:   LeadSource,
+    hunterId?: string,
+    leaderId?: string,
+  ): Promise<FunnelEntry[]> => {
+    const { data, error } = await supabase.rpc('get_funnel_distribution', {
+      p_country:   country  ?? null,
+      p_source:    source   ?? null,
+      p_hunter_id: hunterId ?? null,
+      p_leader_id: leaderId ?? null,
+    })
+    if (error) throw error
+    return (data ?? []) as FunnelEntry[]
+  },
+
+  getStageAdvances: async (
+    period:    string,
+    date:      string,
+    country?:  string,
+    source?:   LeadSource,
+    hunterId?: string,
+    leaderId?: string,
+    dateFrom?: string,
+    dateTo?:   string,
+  ): Promise<StageAdvanceEntry[]> => {
+    const { data, error } = await supabase.rpc('get_stage_advances', {
+      p_period:    period,
+      p_date:      date,
+      p_country:   country  ?? null,
+      p_source:    source   ?? null,
+      p_hunter_id: hunterId ?? null,
+      p_leader_id: leaderId ?? null,
+      p_date_from: dateFrom ?? null,
+      p_date_to:   dateTo   ?? null,
+    })
+    if (error) throw error
+    return (data ?? []) as StageAdvanceEntry[]
+  },
+
+  getDiscardReasons: async (
+    period:    string,
+    date:      string,
+    country?:  string,
+    source?:   LeadSource,
+    hunterId?: string,
+    leaderId?: string,
+    dateFrom?: string,
+    dateTo?:   string,
+  ): Promise<DiscardReasonEntry[]> => {
+    const { data, error } = await supabase.rpc('get_discard_reasons', {
+      p_period:    period,
+      p_date:      date,
+      p_country:   country  ?? null,
+      p_source:    source   ?? null,
+      p_hunter_id: hunterId ?? null,
+      p_leader_id: leaderId ?? null,
+      p_date_from: dateFrom ?? null,
+      p_date_to:   dateTo   ?? null,
+    })
+    if (error) throw error
+    return (data ?? []) as DiscardReasonEntry[]
   },
 
   getClosedRateReport: async (
@@ -564,7 +637,7 @@ export const profilesApi = {
     return (data ?? []).map(mapProfile)
   },
 
-  getHunters: async (filters?: { country?: Country; source?: LeadSource; leaderId?: string }) => {
+  getHunters: async (filters?: { country?: Country; leaderId?: string }) => {
     let query = supabase
       .from('profiles')
       .select('*')
@@ -573,8 +646,22 @@ export const profilesApi = {
       .order('full_name')
 
     if (filters?.country)  query = query.eq('country', filters.country)
-    if (filters?.source)   query = query.eq('team', filters.source)
     if (filters?.leaderId) query = query.eq('leader_id', filters.leaderId)
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data ?? []).map(mapProfile)
+  },
+
+  getLiders: async (country?: Country) => {
+    let query = supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'LIDER')
+      .eq('is_active', true)
+      .order('full_name')
+
+    if (country) query = query.eq('country', country)
 
     const { data, error } = await query
     if (error) throw error
@@ -587,7 +674,6 @@ export const profilesApi = {
     fullName:    string
     role:        string
     country:     Country
-    team:        LeadSource
     dailyTarget: number
     leaderId?:   string
   }) => {
@@ -599,7 +685,6 @@ export const profilesApi = {
         full_name:    payload.fullName,
         role:         payload.role,
         country:      payload.country,
-        team:         payload.team,
         daily_target: payload.dailyTarget,
         leader_id:    payload.leaderId ?? null,
       })
@@ -613,7 +698,6 @@ export const profilesApi = {
     fullName?:    string
     role?:        string
     country?:     Country
-    team?:        LeadSource
     dailyTarget?: number
     leaderId?:    string
     isActive?:    boolean
@@ -622,7 +706,6 @@ export const profilesApi = {
     if (patch.fullName    !== undefined) snakePatch.full_name    = patch.fullName
     if (patch.role        !== undefined) snakePatch.role         = patch.role
     if (patch.country     !== undefined) snakePatch.country      = patch.country
-    if (patch.team        !== undefined) snakePatch.team         = patch.team
     if (patch.dailyTarget !== undefined) snakePatch.daily_target = patch.dailyTarget
     if (patch.leaderId    !== undefined) snakePatch.leader_id    = patch.leaderId
     if (patch.isActive    !== undefined) snakePatch.is_active    = patch.isActive

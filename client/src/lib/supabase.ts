@@ -13,6 +13,7 @@ export const supabaseAdmin = createClient(
       persistSession:     false,
       autoRefreshToken:   false,
       detectSessionInUrl: false,
+      storageKey:         'sb-admin-token',
     },
   }
 )

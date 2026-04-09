@@ -136,9 +136,9 @@ export interface HunterStats {
   hunterName:                string
   hunterEmail:               string
   country:                   Country
-  team:                      LeadSource
   ranking:                   number
   totalLeads:                number
+  leadsWithoutContact:       number
   leadsConTyc:               number
   leadsSinTyc:               number
   leadsWithContactAttempt:   number
@@ -147,13 +147,13 @@ export interface HunterStats {
   productivity:              number
   obCount:                   number
   r2sCount:                  number
-  accumulatedTarget:         number
-  gap:                       number
-  phasing:                   number
+  r2sPerDay:                 number
+  closeRate:                 number
 }
 
 export interface TeamSummaryTotals {
   totalLeads:                number
+  leadsWithoutContact:       number
   leadsConTyc:               number
   leadsSinTyc:               number
   leadsWithContactAttempt:   number
@@ -161,17 +161,35 @@ export interface TeamSummaryTotals {
   productivity:              number
   obCount:                   number
   r2sCount:                  number
-  accumulatedTarget:         number
   contactabilityRate:        number
-  gap:                       number
+  closeRate:                 number
+  teamR2sPerDay:             number
 }
 
 export interface TeamSummaryResponse {
   period:  string
   from:    string
   to:      string
+  bizDays: number
   totals:  TeamSummaryTotals
   team:    HunterStats[]
+}
+
+// ─── Gestión chart types ──────────────────────────────────────────────────────
+
+export interface FunnelEntry {
+  stage: string
+  count: number
+}
+
+export interface StageAdvanceEntry {
+  stage: string
+  count: number
+}
+
+export interface DiscardReasonEntry {
+  reason: string
+  count:  number
 }
 
 // ─── Closed rate report ───────────────────────────────────────────────────────

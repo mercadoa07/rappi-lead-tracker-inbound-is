@@ -135,7 +135,9 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const alertCount       = useAlertCount()
 
   const navItems: NavItem[] = [
-    { to: '/gestion',  label: 'Gestión',     Icon: TrendingUp },
+    ...(user?.role === 'LIDER' || user?.role === 'ADMIN'
+      ? [{ to: '/gestion', label: 'Gestión', Icon: TrendingUp }]
+      : []),
     { to: '/leads',    label: 'Mis Leads',   Icon: Users      },
     { to: '/pipeline', label: 'Pipeline',    Icon: Columns3   },
     { to: '/ranking',  label: 'Ranking',     Icon: Trophy     },
@@ -269,7 +271,9 @@ function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   const alertCount       = useAlertCount()
 
   const navItems: NavItem[] = [
-    { to: '/gestion',  label: 'Gestión',     Icon: TrendingUp },
+    ...(user?.role === 'LIDER' || user?.role === 'ADMIN'
+      ? [{ to: '/gestion', label: 'Gestión', Icon: TrendingUp }]
+      : []),
     { to: '/leads',    label: 'Mis Leads',   Icon: Users      },
     { to: '/pipeline', label: 'Pipeline',    Icon: Columns3   },
     { to: '/ranking',  label: 'Ranking',     Icon: Trophy     },
