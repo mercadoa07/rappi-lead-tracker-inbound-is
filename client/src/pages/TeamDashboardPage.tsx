@@ -236,16 +236,6 @@ function SobMetricsPanel({ totals }: { totals: TeamSummaryResponse['totals'] | u
             </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-2 flex justify-between text-sm">
-            <span className="text-gray-600 font-semibold">Meta acumulada</span>
-            <span className="font-bold text-dark">{totals.accumulatedTarget}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600 font-semibold">Gap vs meta</span>
-            <span className={cn('font-bold', totals.gap >= 0 ? 'text-success' : 'text-danger')}>
-              {totals.gap >= 0 ? '+' : ''}{totals.gap}
-            </span>
-          </div>
         </div>
       </div>
     </div>
