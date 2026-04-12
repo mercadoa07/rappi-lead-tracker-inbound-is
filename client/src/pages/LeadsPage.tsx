@@ -21,13 +21,13 @@ const ALL_STAGES: FunnelStage[] = [
 ]
 
 const MOTIVOS_DESCARTE: { value: string; label: string }[] = [
-  { value: 'Bloqueado: Imposible contacto',  label: 'Imposible contacto'  },
-  { value: 'Bloqueado: No le interesa',      label: 'No le interesa'      },
-  { value: 'Bloqueado: No es restaurante',   label: 'No es restaurante'   },
-  { value: 'Bloqueado: Restaurante cerrado', label: 'Restaurante cerrado' },
-  { value: 'Bloqueado: Ya trabaja con Rappi',label: 'Ya trabaja con Rappi'},
-  { value: 'Bloqueado: Fuera de cobertura',  label: 'Fuera de cobertura'  },
-  { value: 'Bloqueado: Lead duplicado',      label: 'Lead duplicado'      },
+  { value: 'Imposible contacto',  label: 'Imposible contacto'  },
+  { value: 'No le interesa',      label: 'No le interesa'      },
+  { value: 'No es restaurante',   label: 'No es restaurante'   },
+  { value: 'Restaurante cerrado', label: 'Restaurante cerrado' },
+  { value: 'Ya trabaja con Rappi',label: 'Ya trabaja con Rappi'},
+  { value: 'Fuera de cobertura',  label: 'Fuera de cobertura'  },
+  { value: 'Lead duplicado',      label: 'Lead duplicado'      },
 ]
 
 const COUNTRY_NAME: Record<Country, string> = {
