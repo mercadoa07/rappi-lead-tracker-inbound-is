@@ -20,6 +20,16 @@ const ALL_STAGES: FunnelStage[] = [
   'EN_FIRMA', 'OB', 'OK_R2S', 'VENTA', 'DESCARTADO',
 ]
 
+const MOTIVOS_DESCARTE: { value: string; label: string }[] = [
+  { value: 'Bloqueado: Imposible contacto',  label: 'Imposible contacto'  },
+  { value: 'Bloqueado: No le interesa',      label: 'No le interesa'      },
+  { value: 'Bloqueado: No es restaurante',   label: 'No es restaurante'   },
+  { value: 'Bloqueado: Restaurante cerrado', label: 'Restaurante cerrado' },
+  { value: 'Bloqueado: Ya trabaja con Rappi',label: 'Ya trabaja con Rappi'},
+  { value: 'Bloqueado: Fuera de cobertura',  label: 'Fuera de cobertura'  },
+  { value: 'Bloqueado: Lead duplicado',      label: 'Lead duplicado'      },
+]
+
 const COUNTRY_NAME: Record<Country, string> = {
   CO: 'Colombia', MX: 'México', AR: 'Argentina',
   PE: 'Perú',     CL: 'Chile',  EC: 'Ecuador',
@@ -444,6 +454,7 @@ export default function LeadsPage() {
   )
   const [searchInput,   setSearchInput]   = useState('')
   const [stages,        setStages]        = useState<FunnelStage[]>(initialStage ? [initialStage] : [])
+  const [motivoDescarte,setMotivoDescarte]= useState('')
   const [country,       setCountry]       = useState<Country | ''>('')
   const [dateFrom,      setDateFrom]      = useState('')
   const [dateTo,        setDateTo]        = useState('')
@@ -453,20 +464,26 @@ export default function LeadsPage() {
 
   const search = useDebounce(searchInput, 300)
 
+  // Reset motivo when DESCARTADO is deselected
+  useEffect(() => {
+    if (!stages.includes('DESCARTADO')) setMotivoDescarte('')
+  }, [stages])
+
   // Reset page on filter changes
-  useEffect(() => { setPage(1) }, [search, stages, country, sourceFilter, dateFrom, dateTo])
+  useEffect(() => { setPage(1) }, [search, stages, motivoDescarte, country, sourceFilter, dateFrom, dateTo])
 
   const sourceParam = sourceFilter === 'all' ? undefined : sourceFilter as LeadSource
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['leads', search, stages, country, sourceFilter, dateFrom, dateTo, page, sortBy, sortOrder],
+    queryKey: ['leads', search, stages, motivoDescarte, country, sourceFilter, dateFrom, dateTo, page, sortBy, sortOrder],
     queryFn:  () => leadsApi.getLeads({
-      search:    search    || undefined,
-      stage:     stages.length ? stages : undefined,
-      country:   (country as Country) || undefined,
-      source:    sourceParam,
-      dateFrom:  dateFrom  || undefined,
-      dateTo:    dateTo    || undefined,
+      search:         search          || undefined,
+      stage:          stages.length   ? stages : undefined,
+      motivoDescarte: motivoDescarte  || undefined,
+      country:        (country as Country) || undefined,
+      source:         sourceParam,
+      dateFrom:       dateFrom        || undefined,
+      dateTo:         dateTo          || undefined,
       page,
       limit:     PAGE_SIZE,
       sortBy,
@@ -476,11 +493,12 @@ export default function LeadsPage() {
   })
 
   const hasActiveFilters =
-    !!search || stages.length > 0 || !!country || sourceFilter !== 'all' || !!dateFrom || !!dateTo
+    !!search || stages.length > 0 || !!motivoDescarte || !!country || sourceFilter !== 'all' || !!dateFrom || !!dateTo
 
   const clearFilters = useCallback(() => {
     setSearchInput('')
     setStages([])
+    setMotivoDescarte('')
     setCountry('')
     setSourceFilter('all')
     setDateFrom('')
@@ -549,6 +567,20 @@ export default function LeadsPage() {
 
             {/* Stage multi-select */}
             <StageSelect value={stages} onChange={setStages} />
+
+            {/* Motivo descarte — solo cuando DESCARTADO está seleccionado */}
+            {stages.includes('DESCARTADO') && (
+              <select
+                value={motivoDescarte}
+                onChange={(e) => setMotivoDescarte(e.target.value)}
+                className="h-9 px-3 rounded-xl border border-red-200 text-sm text-dark bg-white focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400 transition cursor-pointer"
+              >
+                <option value="">Todos los motivos</option>
+                {MOTIVOS_DESCARTE.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            )}
 
             {/* Country — LIDER / ADMIN only */}
             {showCountry && (

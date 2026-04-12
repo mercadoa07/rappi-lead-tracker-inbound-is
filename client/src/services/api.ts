@@ -140,18 +140,19 @@ export function mapProfile(row: any): User {
 
 export const leadsApi = {
   getLeads: async (filters: {
-    search?:    string
-    stage?:     FunnelStage[]
-    country?:   Country
-    source?:    LeadSource
-    opsZone?:   string
-    assigned?:  'all' | 'assigned' | 'unassigned'
-    dateFrom?:  string
-    dateTo?:    string
-    page:       number
-    limit:      number
-    sortBy?:    string
-    sortOrder?: 'asc' | 'desc'
+    search?:          string
+    stage?:           FunnelStage[]
+    motivoDescarte?:  string
+    country?:         Country
+    source?:          LeadSource
+    opsZone?:         string
+    assigned?:        'all' | 'assigned' | 'unassigned'
+    dateFrom?:        string
+    dateTo?:          string
+    page:             number
+    limit:            number
+    sortBy?:          string
+    sortOrder?:       'asc' | 'desc'
   }) => {
     const sortColumn =
       filters.sortBy === 'assignedAt'    ? 'assigned_at'
@@ -172,8 +173,9 @@ export const leadsApi = {
         )
       }
     }
-    if (filters.stage?.length) query = query.in('current_stage', filters.stage)
-    if (filters.country)       query = query.eq('country', filters.country)
+    if (filters.stage?.length)        query = query.in('current_stage', filters.stage)
+    if (filters.motivoDescarte)       query = query.eq('motivo_descarte', filters.motivoDescarte)
+    if (filters.country)              query = query.eq('country', filters.country)
     if (filters.source)        query = query.eq('source', filters.source)
     if (filters.opsZone)       query = query.ilike('ops_zone', `%${filters.opsZone}%`)
     if (filters.dateFrom)      query = query.gte('assigned_at', filters.dateFrom)
