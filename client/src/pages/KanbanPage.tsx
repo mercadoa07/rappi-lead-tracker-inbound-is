@@ -27,8 +27,9 @@ import type { Lead, FunnelStage, LeadSource } from '../types'
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Etapas que se muestran como columnas en el Kanban
-// SIN_CONTACTO y OK_R2S se muestran como contadores, no como columnas
+// OK_R2S y DESCARTADO se muestran como contadores, no como columnas
 const ACTIVE_STAGES: FunnelStage[] = [
+  'SIN_CONTACTO',
   'CONTACTO_FALLIDO',
   'CONTACTO_EFECTIVO',
   'EN_GESTION',
@@ -167,14 +168,17 @@ function KanbanColumn({
   leads,
   isOver,
   canDrop,
+  totalCount,
 }: {
-  stage:   FunnelStage
-  leads:   Lead[]
-  isOver:  boolean
-  canDrop: boolean
+  stage:       FunnelStage
+  leads:       Lead[]
+  isOver:      boolean
+  canDrop:     boolean
+  totalCount?: number
 }) {
   const { setNodeRef } = useDroppable({ id: stage })
   const colors = STAGE_COLORS[stage]
+  const displayCount = totalCount ?? leads.length
 
   return (
     <div
@@ -192,7 +196,7 @@ function KanbanColumn({
           {STAGE_LABEL[stage]}
         </span>
         <span className={cn('text-xs font-bold px-1.5 py-0.5 rounded-full bg-white/70', colors.text)}>
-          {leads.length}
+          {displayCount.toLocaleString()}
         </span>
       </div>
 
@@ -204,6 +208,11 @@ function KanbanColumn({
         {leads.length === 0 && (
           <div className="flex items-center justify-center h-16 text-xs text-gray-300 italic">
             Sin leads
+          </div>
+        )}
+        {totalCount !== undefined && totalCount > leads.length && (
+          <div className="text-center text-[10px] text-gray-400 italic py-1">
+            mostrando {leads.length} de {totalCount.toLocaleString()}
           </div>
         )}
       </div>
@@ -290,8 +299,9 @@ export default function KanbanPage() {
   const [overStage, setOverStage] = useState<FunnelStage | null>(null)
 
   // ── Fetch leads ──────────────────────────────────────────────────────────────
-  const { data: kanbanData, isLoading } = useQuery({
-    queryKey: ['leads-kanban', source, search],
+  // Pipeline + R2S + Descartado (separate from SIN_CONTACTO to avoid limit issues)
+  const { data: pipelineData, isLoading: loadingPipeline } = useQuery({
+    queryKey: ['kanban', 'pipeline', source, search],
     queryFn:  () =>
       leadsApi.getLeads({
         search:  search || undefined,
@@ -305,14 +315,34 @@ export default function KanbanPage() {
     select: (res) => res.data,
   })
 
-  const allLeads: Lead[] = kanbanData ?? []
+  // SIN_CONTACTO fetched separately with a small card limit — total is still exact
+  const { data: sinContactoResp, isLoading: loadingSinContacto } = useQuery({
+    queryKey: ['kanban', 'sin-contacto', source, search],
+    queryFn:  () =>
+      leadsApi.getLeads({
+        search:  search || undefined,
+        source:  source !== 'ALL' ? source : undefined,
+        stage:   ['SIN_CONTACTO'],
+        page:    1,
+        limit:   100,
+      }),
+  })
+
+  const sinContactoLeads = sinContactoResp?.data   ?? []
+  const sinContactoTotal = sinContactoResp?.total  ?? 0
+
+  const isLoading = loadingPipeline || loadingSinContacto
+  const allLeads: Lead[] = useMemo(
+    () => [...(pipelineData ?? []), ...sinContactoLeads],
+    [pipelineData, sinContactoLeads],
+  )
 
   // ── Group by stage ───────────────────────────────────────────────────────────
   const byStage = useMemo(() => {
     const map: Record<FunnelStage, Lead[]> = {} as Record<FunnelStage, Lead[]>
     for (const s of [...ACTIVE_STAGES, 'OK_R2S' as FunnelStage, 'DESCARTADO' as FunnelStage]) map[s] = []
     for (const lead of allLeads) {
-      if (map[lead.currentStage]) map[lead.currentStage].push(lead)
+      if (map[lead.currentStage] !== undefined) map[lead.currentStage].push(lead)
     }
     return map
   }, [allLeads])
@@ -340,7 +370,7 @@ export default function KanbanPage() {
       stageApi.transitionStage(leadId, toStage),
     onSuccess: (_data, { toStage }) => {
       toast.success(`Movido a ${STAGE_LABEL[toStage]}`)
-      queryClient.invalidateQueries({ queryKey: ['leads-kanban'] })
+      queryClient.invalidateQueries({ queryKey: ['kanban'] })
     },
     onError: (err: unknown) => {
       const msg = (err as Error)?.message ?? 'Error al cambiar etapa'
@@ -458,6 +488,7 @@ export default function KanbanPage() {
                   leads={byStage[stage] ?? []}
                   isOver={overStage === stage}
                   canDrop={canDropOnOver}
+                  totalCount={stage === 'SIN_CONTACTO' ? sinContactoTotal : undefined}
                 />
               ))}
 
@@ -493,7 +524,7 @@ export default function KanbanPage() {
                 </span>
               )}
               <span className="text-xs text-gray-400">
-                (no se muestran como columnas — ver desde lista de leads)
+                (R2S y Descartados no se muestran como columnas — ver desde lista de leads)
               </span>
             </div>
           )}

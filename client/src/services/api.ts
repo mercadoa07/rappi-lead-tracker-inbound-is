@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { supabase, supabaseAdmin } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { STAGE_TRANSITIONS } from '../utils/constants'
 import type {
   Lead, ContactAttempt, StageHistory, Alert, FunnelStage,
@@ -165,9 +165,12 @@ export const leadsApi = {
       .eq('is_deleted', false)
 
     if (filters.search) {
-      query = query.or(
-        `name.ilike.%${filters.search}%,lead_id_external.ilike.%${filters.search}%`,
-      )
+      const safe = filters.search.replace(/[,()*%\\:"']/g, ' ').trim()
+      if (safe) {
+        query = query.or(
+          `name.ilike.%${safe}%,lead_id_external.ilike.%${safe}%`,
+        )
+      }
     }
     if (filters.stage?.length) query = query.in('current_stage', filters.stage)
     if (filters.country)       query = query.eq('country', filters.country)
@@ -679,19 +682,15 @@ export const profilesApi = {
     dailyTarget: number
     leaderId?:   string
   }) => {
-    const { data, error } = await supabaseAdmin
-      .from('profiles')
-      .insert({
-        id:           payload.id,
-        email:        payload.email,
-        full_name:    payload.fullName,
-        role:         payload.role,
-        country:      payload.country,
-        daily_target: payload.dailyTarget,
-        leader_id:    payload.leaderId ?? null,
-      })
-      .select()
-      .single()
+    const { data, error } = await supabase.rpc('admin_create_profile', {
+      p_id:           payload.id,
+      p_email:        payload.email,
+      p_full_name:    payload.fullName,
+      p_role:         payload.role,
+      p_country:      payload.country,
+      p_daily_target: payload.dailyTarget,
+      p_leader_id:    payload.leaderId ?? null,
+    })
     if (error) throw error
     return mapProfile(data)
   },
@@ -727,7 +726,7 @@ export const profilesApi = {
     if (hunterIds.length === 0 || leadIds.length === 0) return
 
     const perHunter = Math.ceil(leadIds.length / hunterIds.length)
-    const updates: PromiseLike<unknown>[] = []
+    const updates: Promise<unknown>[] = []
     let idx = 0
 
     for (const hunterId of hunterIds) {
@@ -736,22 +735,29 @@ export const profilesApi = {
       if (batch.length === 0) break
 
       updates.push(
-        supabase
-          .from('leads')
-          .update({
-            assigned_to_id: hunterId,
-            assigned_at:    new Date().toISOString(),
-          })
-          .in('id', batch)
-          .then(() => undefined),
+        Promise.resolve(
+          supabase
+            .from('leads')
+            .update({
+              assigned_to_id: hunterId,
+              assigned_at:    new Date().toISOString(),
+            })
+            .in('id', batch)
+        ).then(({ error }) => {
+          if (error) throw error
+        }),
       )
     }
 
-    await Promise.all(updates)
+    const results = await Promise.allSettled(updates)
+    const failed  = results.filter((r) => r.status === 'rejected')
+    if (failed.length > 0) {
+      throw new Error(`${failed.length} batch(es) de asignación fallaron`)
+    }
   },
 }
 
-// ─── importApi (usa supabaseAdmin para bypassear RLS) ────────────────────────
+// ─── importApi ───────────────────────────────────────────────────────────────
 
 export const importApi = {
   upsertLeads: async (rows: Record<string, unknown>[]) => {
@@ -762,17 +768,12 @@ export const importApi = {
 
     for (let i = 0; i < rows.length; i += BATCH) {
       const batch = rows.slice(i, i + BATCH)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (supabaseAdmin
-        .from('leads')
-        .upsert(batch, { onConflict: 'lead_id_external', ignoreDuplicates: false }) as any)
-      const { error } = result
-
+      const { data, error } = await supabase.rpc('admin_upsert_leads', { p_rows: batch })
       if (error) {
         errors.push(`Batch ${Math.floor(i / BATCH) + 1}: ${error.message}`)
         skipped += batch.length
       } else {
-        imported += batch.length
+        imported += (data?.imported ?? batch.length)
       }
     }
 
@@ -780,9 +781,7 @@ export const importApi = {
   },
 
   upsertProfiles: async (rows: Record<string, unknown>[]) => {
-    const { error } = await supabaseAdmin
-      .from('profiles')
-      .upsert(rows, { onConflict: 'email', ignoreDuplicates: false })
+    const { error } = await supabase.rpc('admin_upsert_profiles', { p_rows: rows })
     if (error) throw error
   },
 }

@@ -63,7 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    let initialLoadDone = false
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      initialLoadDone = true
       if (session?.user) {
         loadProfile(session.user.id)
       } else {
@@ -71,7 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!initialLoadDone || event === 'INITIAL_SESSION') return
       if (session?.user) {
         loadProfile(session.user.id)
       } else {
