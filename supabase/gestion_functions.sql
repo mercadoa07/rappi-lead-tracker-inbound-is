@@ -44,7 +44,7 @@ begin
     (select count(*)::int from generate_series(v_start, v_end, '1 day'::interval) d
      where extract(isodow from d) <= 5);
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public, pg_temp;
 
 -- ─── 2. get_team_summary — nuevos filtros + nuevas métricas ──────────────────
 --   Nuevos parámetros : p_hunter_id, p_leader_id, p_date_from, p_date_to
@@ -84,8 +84,8 @@ begin
         and (p_country   is null or p.country::text = p_country)
         and (p_hunter_id is null or p.id = p_hunter_id)
         and (
-          v_role = 'LIDER' and p.leader_id = v_user_id
-          or v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id)
+          (v_role = 'LIDER' and p.leader_id = v_user_id)
+          or (v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id))
         )
     ),
     hunter_stats as (
@@ -237,7 +237,7 @@ begin
     from ranked
   );
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public, pg_temp;
 
 -- ─── 3. get_funnel_distribution — distribución actual de etapas ──────────────
 
@@ -266,14 +266,14 @@ begin
         and (p_source    is null or l.source = p_source)
         and (p_hunter_id is null or l.assigned_to_id = p_hunter_id)
         and (
-          v_role = 'LIDER' and p.leader_id = v_user_id
-          or v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id)
+          (v_role = 'LIDER' and p.leader_id = v_user_id)
+          or (v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id))
         )
       group by l.current_stage
     ) s
   );
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public, pg_temp;
 
 -- ─── 4. get_stage_advances — leads que entraron a cada etapa en el período ────
 
@@ -312,14 +312,14 @@ begin
         and (p_source    is null or l.source = p_source)
         and (p_hunter_id is null or l.assigned_to_id = p_hunter_id)
         and (
-          v_role = 'LIDER' and p.leader_id = v_user_id
-          or v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id)
+          (v_role = 'LIDER' and p.leader_id = v_user_id)
+          or (v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id))
         )
       group by sh.to_stage
     ) s
   );
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public, pg_temp;
 
 -- ─── 5. get_discard_reasons — causales de descarte en el período ─────────────
 
@@ -359,11 +359,11 @@ begin
         and (p_source    is null or l.source = p_source)
         and (p_hunter_id is null or l.assigned_to_id = p_hunter_id)
         and (
-          v_role = 'LIDER' and p.leader_id = v_user_id
-          or v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id)
+          (v_role = 'LIDER' and p.leader_id = v_user_id)
+          or (v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id))
         )
       group by sh.to_stage
     ) s
   );
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public, pg_temp;

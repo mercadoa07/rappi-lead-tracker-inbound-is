@@ -342,7 +342,11 @@ export default function KanbanPage() {
     const map: Record<FunnelStage, Lead[]> = {} as Record<FunnelStage, Lead[]>
     for (const s of [...ACTIVE_STAGES, 'OK_R2S' as FunnelStage, 'DESCARTADO' as FunnelStage]) map[s] = []
     for (const lead of allLeads) {
-      if (map[lead.currentStage] !== undefined) map[lead.currentStage].push(lead)
+      if (map[lead.currentStage] !== undefined) {
+        map[lead.currentStage].push(lead)
+      } else {
+        console.warn(`[Kanban] stage inesperado: ${lead.currentStage} (lead ${lead.id})`)
+      }
     }
     return map
   }, [allLeads])

@@ -20,7 +20,7 @@ create table if not exists public.profile_invites (
 -- ─── 2. Función del trigger ────────────────────────────────────────────────────
 
 create or replace function public.handle_new_user_from_invite()
-returns trigger language plpgsql security definer as $$
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_invite  public.profile_invites%rowtype;
   v_leader_id uuid;

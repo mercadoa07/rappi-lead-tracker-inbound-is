@@ -40,8 +40,8 @@ begin
         and (p_country   is null or p.country::text = p_country)
         and (p_hunter_id is null or p.id = p_hunter_id)
         and (
-          v_role = 'LIDER' and p.leader_id = v_user_id
-          or v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id)
+          (v_role = 'LIDER' and p.leader_id = v_user_id)
+          or (v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id))
         )
     ),
     hunter_stats as (
@@ -188,7 +188,7 @@ begin
     from ranked
   );
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public, pg_temp;
 
 -- ─── get_stage_advances — usa fecha_estado del lead en vez de stage_history ───
 
@@ -227,8 +227,8 @@ begin
         and (p_source    is null or l.source = p_source)
         and (p_hunter_id is null or l.assigned_to_id = p_hunter_id)
         and (
-          v_role = 'LIDER' and p.leader_id = v_user_id
-          or v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id)
+          (v_role = 'LIDER' and p.leader_id = v_user_id)
+          or (v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id))
         )
         -- Usa fecha_estado si existe, si no usa stage_changed_at
         and coalesce(l.fecha_estado::timestamptz, l.stage_changed_at) between v_from and v_to
@@ -237,7 +237,7 @@ begin
     ) s
   );
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public, pg_temp;
 
 -- ─── get_discard_reasons — usa motivo_descarte del lead ──────────────────────
 
@@ -277,11 +277,11 @@ begin
         and (p_source    is null or l.source = p_source)
         and (p_hunter_id is null or l.assigned_to_id = p_hunter_id)
         and (
-          v_role = 'LIDER' and p.leader_id = v_user_id
-          or v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id)
+          (v_role = 'LIDER' and p.leader_id = v_user_id)
+          or (v_role = 'ADMIN' and (p_leader_id is null or p.leader_id = p_leader_id))
         )
       group by l.motivo_descarte
     ) s
   );
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public, pg_temp;

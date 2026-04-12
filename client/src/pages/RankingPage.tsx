@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -102,7 +102,7 @@ function SourceToggle({
 
 // ─── RankingRow ───────────────────────────────────────────────────────────────
 
-function RankingRow({
+const RankingRow = memo(function RankingRow({
   entry, rank, isCurrent,
 }: {
   entry: HunterStats; rank: number; isCurrent: boolean
@@ -175,7 +175,7 @@ function RankingRow({
       </td>
     </tr>
   )
-}
+})
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -199,7 +199,7 @@ const PODIUM_STYLES = {
   3: { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  icon: Award, iconCls: 'text-amber-500',  tagline: 'Bronce',      lift: false },
 } as const
 
-function PodiumCard({ entry, rank, isCurrent }: { entry: HunterStats; rank: number; isCurrent: boolean }) {
+const PodiumCard = memo(function PodiumCard({ entry, rank, isCurrent }: { entry: HunterStats; rank: number; isCurrent: boolean }) {
   const s     = PODIUM_STYLES[rank as 1 | 2 | 3]
   const Icon  = s.icon
   const inits = entry.hunterName.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('')
@@ -224,7 +224,7 @@ function PodiumCard({ entry, rank, isCurrent }: { entry: HunterStats; rank: numb
       <p className="text-[10px] text-gray-400">productividad (OB+R2S)</p>
     </div>
   )
-}
+})
 
 // ─── RankingPage ──────────────────────────────────────────────────────────────
 
