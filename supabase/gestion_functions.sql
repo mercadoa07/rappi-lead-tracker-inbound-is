@@ -153,13 +153,11 @@ begin
            and (p_source is null or l.source = p_source)
         ) as ob_count,
 
-        -- R2S: leads que entraron a OK_R2S o VENTA durante el período
-        (select count(distinct sh.lead_id)
-         from stage_history sh
-         join leads l on l.id = sh.lead_id
+        -- R2S: leads con negociacion_exitosa=true cuya fecha_estado cae en el período
+        (select count(distinct l.id) from leads l
          where l.assigned_to_id = h.id and l.is_deleted = false
-           and sh.to_stage in ('OK_R2S', 'VENTA')
-           and sh.changed_at between v_from and v_to
+           and l.negociacion_exitosa = true
+           and l.fecha_estado::timestamptz between v_from and v_to
            and (p_source is null or l.source = p_source)
         ) as r2s_count
 

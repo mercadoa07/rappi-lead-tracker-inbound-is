@@ -40,7 +40,7 @@ type SortDir = 'asc' | 'desc'
 type SortField =
   | 'hunterName' | 'country' | 'totalLeads' | 'leadsWithoutContact'
   | 'leadsWithContactAttempt' | 'leadsWithEffectiveContact'
-  | 'obCount' | 'r2sCount' | 'r2sPerDay' | 'closeRate'
+  | 'obCount' | 'r2sCount' | 'r2sPerDay' | 'closeRate' | 'periodTarget'
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
@@ -288,6 +288,7 @@ export default function GestionPage() {
     { label: 'C.Efectivos',   field: 'leadsWithEffectiveContact' },
     { label: 'OB',            field: 'obCount' },
     { label: 'R2S',           field: 'r2sCount' },
+    { label: 'Meta',          field: 'periodTarget' },
     { label: 'R2S/día',       field: 'r2sPerDay' },
     { label: 'Close rate',    field: 'closeRate' },
   ]
@@ -419,7 +420,7 @@ export default function GestionPage() {
       </div>
 
       {/* ── KPI Cards ───────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <Kpi
           label="Asignados"
           value={totals?.totalLeads ?? 0}
@@ -459,6 +460,12 @@ export default function GestionPage() {
           value={totals?.teamR2sPerDay?.toFixed(2) ?? '0.00'}
           sub="promedio por comercial"
           color="text-primary"
+        />
+        <Kpi
+          label="Meta período"
+          value={totals?.teamTarget ?? 0}
+          sub={`${summary?.bizDays ?? 0} días hábiles · ${totals?.teamTarget && totals.teamTarget > 0 ? ((totals.r2sCount / totals.teamTarget) * 100).toFixed(0) : 0}% cumplido`}
+          color={(totals?.teamTarget ?? 0) > 0 && (totals?.r2sCount ?? 0) / (totals?.teamTarget ?? 1) >= 1 ? 'text-success' : 'text-warning'}
         />
       </div>
 
@@ -679,6 +686,24 @@ export default function GestionPage() {
                       <span className={cn('text-sm font-bold tabular-nums', h.r2sCount > 0 ? 'text-success' : 'text-gray-400')}>
                         {h.r2sCount}
                       </span>
+                    </td>
+                    {/* Meta período */}
+                    <td className="px-3 py-2.5">
+                      {(h.periodTarget ?? 0) > 0 ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs text-gray-400 tabular-nums">
+                            {h.r2sCount} / {h.periodTarget}
+                          </span>
+                          <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={cn('h-full rounded-full', h.r2sCount >= h.periodTarget ? 'bg-success' : 'bg-warning')}
+                              style={{ width: `${Math.min((h.r2sCount / h.periodTarget) * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
                     </td>
                     {/* R2S/día */}
                     <td className="px-3 py-2.5 text-sm font-bold text-primary tabular-nums">

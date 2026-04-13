@@ -145,6 +145,8 @@ export interface HunterStats {
   r2sCount:                  number
   r2sPerDay:                 number
   closeRate:                 number
+  dailyTarget:               number
+  periodTarget:              number
 }
 
 export interface TeamSummaryTotals {
@@ -160,6 +162,7 @@ export interface TeamSummaryTotals {
   contactabilityRate:        number
   closeRate:                 number
   teamR2sPerDay:             number
+  teamTarget:                number
 }
 
 export interface TeamSummaryResponse {
