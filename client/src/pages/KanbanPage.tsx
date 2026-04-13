@@ -21,7 +21,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { leadsApi, stageApi } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { cn } from '../utils/cn'
-import { STAGE_LABEL, STAGE_COLORS, STAGE_TRANSITIONS } from '../utils/constants'
+import { STAGE_LABEL, STAGE_COLORS, STAGE_TRANSITIONS, ADMIN_STAGE_TRANSITIONS } from '../utils/constants'
 import type { Lead, FunnelStage, LeadSource } from '../types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -392,7 +392,8 @@ export default function KanbanPage() {
 
     if (!lead || lead.currentStage === toStage) return
 
-    const allowed = STAGE_TRANSITIONS[lead.currentStage] ?? []
+    const transitionMap = (user?.role === 'ADMIN' || user?.role === 'LIDER') ? ADMIN_STAGE_TRANSITIONS : STAGE_TRANSITIONS
+    const allowed = transitionMap[lead.currentStage] ?? []
     if (!allowed.includes(toStage)) {
       toast.error(`Transición no permitida: ${STAGE_LABEL[lead.currentStage]} → ${STAGE_LABEL[toStage]}`)
       return
@@ -410,7 +411,8 @@ export default function KanbanPage() {
   // ── Can drop check ───────────────────────────────────────────────────────────
   const canDropOnOver = useMemo(() => {
     if (!activeLead || !overStage) return false
-    const allowed = STAGE_TRANSITIONS[activeLead.currentStage] ?? []
+    const transitionMap = (user?.role === 'ADMIN' || user?.role === 'LIDER') ? ADMIN_STAGE_TRANSITIONS : STAGE_TRANSITIONS
+    const allowed = transitionMap[activeLead.currentStage] ?? []
     return allowed.includes(overStage)
   }, [activeLead, overStage])
 

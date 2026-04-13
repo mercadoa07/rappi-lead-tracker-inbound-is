@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { leadsApi, contactsApi, stageApi, reassignApi } from '../services/api'
 import { cn } from '../utils/cn'
-import { STAGE_LABEL, STAGE_COLORS, STAGE_TRANSITIONS, COUNTRY_FLAG } from '../utils/constants'
+import { STAGE_LABEL, STAGE_COLORS, STAGE_TRANSITIONS, ADMIN_STAGE_TRANSITIONS, COUNTRY_FLAG } from '../utils/constants'
 import { useAuth } from '../context/AuthContext'
 import type { Lead, ContactAttempt, StageHistory, FunnelStage, LeadSource, Reassignment } from '../types'
 import type { ContactResult, ContactMethod } from '../types'
@@ -826,15 +826,17 @@ function StageCard({
   lead: LeadDetail
 }) {
   const queryClient           = useQueryClient()
+  const { user }              = useAuth()
   const [selected,       setSelected]       = useState<FunnelStage | ''>('')
   const [confirm,        setConfirm]        = useState(false)
   const [dropOpen,       setDropOpen]       = useState(false)
   const [motivoDescarte, setMotivoDescarte] = useState('')
   const dropRef = useRef<HTMLDivElement>(null)
 
-  const currentStage = lead.currentStage
-  const transitions  = STAGE_TRANSITIONS[currentStage] ?? []
-  const isTerminal   = transitions.length === 0
+  const currentStage  = lead.currentStage
+  const transitionMap = (user?.role === 'ADMIN' || user?.role === 'LIDER') ? ADMIN_STAGE_TRANSITIONS : STAGE_TRANSITIONS
+  const transitions   = transitionMap[currentStage] ?? []
+  const isTerminal    = transitions.length === 0
 
   const mutation = useMutation({
     mutationFn: ({ stage, motivo }: { stage: FunnelStage; motivo?: string }) =>

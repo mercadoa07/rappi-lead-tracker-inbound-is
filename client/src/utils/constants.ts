@@ -16,6 +16,16 @@ export const STAGE_TRANSITIONS: Record<FunnelStage, FunnelStage[]> = {
   DESCARTADO:           [],
 }
 
+const ALL_STAGES: FunnelStage[] = [
+  'SIN_CONTACTO', 'CONTACTO_FALLIDO', 'CONTACTO_EFECTIVO', 'EN_GESTION',
+  'PROPUESTA_ENVIADA', 'ESPERANDO_DOCUMENTOS', 'EN_FIRMA', 'OB', 'OK_R2S', 'VENTA', 'DESCARTADO',
+]
+
+// ADMIN y LIDER pueden mover a cualquier etapa sin restricciones
+export const ADMIN_STAGE_TRANSITIONS: Record<FunnelStage, FunnelStage[]> = Object.fromEntries(
+  ALL_STAGES.map(s => [s, ALL_STAGES.filter(t => t !== s)])
+) as Record<FunnelStage, FunnelStage[]>
+
 // ─── Stage labels ─────────────────────────────────────────────────────────────
 
 export const STAGE_LABEL: Record<FunnelStage, string> = {
