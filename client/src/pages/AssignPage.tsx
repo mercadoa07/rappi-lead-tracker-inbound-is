@@ -24,16 +24,13 @@ type SourceFilter = 'SDR' | 'SOB' | 'Todos'
 
 // ─── useMyHunters ─────────────────────────────────────────────────────────────
 
-function useMyHunters(source: SourceFilter) {
+function useMyHunters() {
   const { user } = useAuth()
 
   return useQuery<User[]>({
-    queryKey: ['my-hunters-inbound', user?.id, source],
+    queryKey: ['my-hunters-inbound', user?.id],
     queryFn: async () => {
       if (!user?.id) return []
-
-      const sourceFilter: LeadSource | undefined =
-        source === 'Todos' ? undefined : source
 
       let query = supabase
         .from('profiles')
@@ -42,9 +39,7 @@ function useMyHunters(source: SourceFilter) {
         .eq('role', 'HUNTER')
         .order('full_name')
 
-      if (sourceFilter) query = query.eq('team', sourceFilter)
-
-      // LIDER ve todos los hunters de su mismo país (no solo leader_id)
+      // LIDER ve todos los hunters de su mismo país
       // ADMIN ve todos sin restricción
       if (user.role === 'LIDER' && user.country) {
         query = query.eq('country', user.country)
@@ -175,7 +170,7 @@ export default function AssignPage() {
     sortOrder:    'desc',
   })
 
-  const { data: hunters = [] } = useMyHunters(sourceFilter)
+  const { data: hunters = [] } = useMyHunters()
   const { data: owners  = [] } = useOwners()
 
   const leads      = data?.data ?? []
