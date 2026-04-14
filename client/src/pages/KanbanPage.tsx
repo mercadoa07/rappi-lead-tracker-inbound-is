@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   DndContext,
@@ -104,7 +104,7 @@ function MiniSourceBadge({ source }: { source: LeadSource }) {
 
 // ─── Lead card ────────────────────────────────────────────────────────────────
 
-function LeadCard({ lead, isDragging = false }: { lead: Lead; isDragging?: boolean }) {
+const LeadCard = memo(function LeadCard({ lead, isDragging = false }: { lead: Lead; isDragging?: boolean }) {
   const navigate    = useNavigate()
   const daysInStage = differenceInDays(new Date(), parseISO(lead.stageChangedAt))
   const stale       = daysInStage > 2
@@ -147,11 +147,11 @@ function LeadCard({ lead, isDragging = false }: { lead: Lead; isDragging?: boole
       </div>
     </div>
   )
-}
+})
 
 // ─── Draggable card ───────────────────────────────────────────────────────────
 
-function DraggableCard({ lead }: { lead: Lead }) {
+const DraggableCard = memo(function DraggableCard({ lead }: { lead: Lead }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id })
 
   return (
@@ -159,7 +159,7 @@ function DraggableCard({ lead }: { lead: Lead }) {
       <LeadCard lead={lead} isDragging={isDragging} />
     </div>
   )
-}
+})
 
 // ─── Kanban column (desktop) ──────────────────────────────────────────────────
 
@@ -312,13 +312,14 @@ export default function KanbanPage() {
         page:    1,
         limit:   10000,
       }),
-    select: (res) => res.data,
+    select:    (res) => res.data,
+    staleTime: 2 * 60_000,
   })
 
   // SIN_CONTACTO fetched separately with a small card limit — total is still exact
   const { data: sinContactoResp, isLoading: loadingSinContacto } = useQuery({
-    queryKey: ['kanban', 'sin-contacto', source, search],
-    queryFn:  () =>
+    queryKey:  ['kanban', 'sin-contacto', source, search],
+    queryFn:   () =>
       leadsApi.getLeads({
         search:  search || undefined,
         source:  source !== 'ALL' ? source : undefined,
@@ -326,6 +327,7 @@ export default function KanbanPage() {
         page:    1,
         limit:   100,
       }),
+    staleTime: 2 * 60_000,
   })
 
   const sinContactoLeads = sinContactoResp?.data   ?? []
