@@ -69,6 +69,49 @@ function useMyHunters(source: SourceFilter) {
   })
 }
 
+// ─── useOwners (hunters + supervisores) ───────────────────────────────────────
+
+function useOwners() {
+  const { user } = useAuth()
+
+  return useQuery<User[]>({
+    queryKey: ['owners-for-filter', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return []
+
+      // Trae HUNTER y LIDER activos
+      let query = supabase
+        .from('profiles')
+        .select('*')
+        .eq('is_active', true)
+        .in('role', ['HUNTER', 'LIDER'])
+        .order('full_name')
+
+      // LIDER solo ve sus hunters + sí mismo
+      if (user.role === 'LIDER') {
+        query = query.or(`leader_id.eq.${user.id},id.eq.${user.id}`)
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+
+      return (data ?? []).map((p) => ({
+        id:          p.id,
+        email:       p.email,
+        fullName:    p.full_name,
+        role:        p.role,
+        country:     p.country as Country,
+        team:        p.team ?? 'SDR',
+        dailyTarget: p.daily_target ?? 4,
+        isActive:    p.is_active ?? true,
+        leaderId:    p.leader_id ?? undefined,
+      } as User))
+    },
+    staleTime: 60_000,
+    enabled: !!user,
+  })
+}
+
 // ─── TYC badge ────────────────────────────────────────────────────────────────
 
 function TycBadge({ tyc }: { tyc?: string }) {
@@ -132,6 +175,7 @@ export default function AssignPage() {
   })
 
   const { data: hunters = [] } = useMyHunters(sourceFilter)
+  const { data: owners  = [] } = useOwners()
 
   const leads      = data?.data ?? []
   const totalPages = data?.totalPages ?? 1
@@ -284,11 +328,26 @@ export default function AssignPage() {
           className="h-9 px-3 rounded-xl border border-gray-medium text-sm text-dark bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
         >
           <option value="">Todos los propietarios</option>
-          {hunters.map((h) => (
-            <option key={h.id} value={h.id}>
-              {h.fullName} ({h.country})
-            </option>
-          ))}
+          {owners.filter(o => o.role === 'LIDER').length > 0 && (
+            <>
+              <option disabled>── Supervisores ──</option>
+              {owners.filter(o => o.role === 'LIDER').map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.fullName} ({o.country})
+                </option>
+              ))}
+            </>
+          )}
+          {owners.filter(o => o.role === 'HUNTER').length > 0 && (
+            <>
+              <option disabled>── Comerciales ──</option>
+              {owners.filter(o => o.role === 'HUNTER').map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.fullName} ({o.country})
+                </option>
+              ))}
+            </>
+          )}
         </select>
       </div>
 
