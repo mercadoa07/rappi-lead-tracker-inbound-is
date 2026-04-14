@@ -44,9 +44,10 @@ function useMyHunters(source: SourceFilter) {
 
       if (sourceFilter) query = query.eq('team', sourceFilter)
 
-      // LIDER only sees their own hunters; ADMIN sees all
-      if (user.role === 'LIDER') {
-        query = query.eq('leader_id', user.id)
+      // LIDER ve todos los hunters de su mismo país (no solo leader_id)
+      // ADMIN ve todos sin restricción
+      if (user.role === 'LIDER' && user.country) {
+        query = query.eq('country', user.country)
       }
 
       const { data, error } = await query
@@ -87,9 +88,9 @@ function useOwners() {
         .in('role', ['HUNTER', 'LIDER'])
         .order('full_name')
 
-      // LIDER solo ve sus hunters + sí mismo
-      if (user.role === 'LIDER') {
-        query = query.or(`leader_id.eq.${user.id},id.eq.${user.id}`)
+      // LIDER ve todos los del mismo país + sí mismo; ADMIN ve todos
+      if (user.role === 'LIDER' && user.country) {
+        query = query.or(`country.eq.${user.country},id.eq.${user.id}`)
       }
 
       const { data, error } = await query

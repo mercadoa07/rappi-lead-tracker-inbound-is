@@ -136,8 +136,11 @@ function QuickReassignModal({
   const [reason, setReason]     = useState('')
 
   const { data: hunters = [], isLoading: loadingHunters } = useQuery<User[]>({
-    queryKey: ['hunters-for-reassign', user?.id],
-    queryFn:  () => profilesApi.getHunters({ leaderId: user?.role === 'LIDER' ? user.id : undefined }),
+    queryKey: ['hunters-for-reassign', user?.id, user?.country],
+    queryFn:  () => profilesApi.getHunters({
+      // LIDER ve todos los hunters de su país; ADMIN ve todos
+      country: user?.role === 'LIDER' ? user.country : undefined,
+    }),
   })
 
   const mutation = useMutation({
