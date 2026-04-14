@@ -76,7 +76,10 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?
   if (!isAuthenticated) return <Navigate to="/login" replace />
 
   if (roles && user && !roles.includes(user.role)) {
-    return <Navigate to="/gestion" replace />
+    // Redirige a la página de inicio correcta según rol en lugar de /gestion
+    // (evita bucle infinito cuando un HUNTER accede a ruta restringida)
+    const fallback = user.role === 'HUNTER' ? '/leads' : '/gestion'
+    return <Navigate to={fallback} replace />
   }
 
   return <>{children}</>
@@ -85,7 +88,7 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 function AppRoutes() {
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, isLoading, user } = useAuth()
   const defaultPath = (user?.role === 'HUNTER') ? '/leads' : '/gestion'
 
   return (
@@ -210,9 +213,21 @@ function AppRoutes() {
           }
         />
 
-        {/* Defaults */}
-        <Route path="/" element={<Navigate to={defaultPath} replace />} />
-        <Route path="*" element={<Navigate to={defaultPath} replace />} />
+        {/* Defaults — espera a que cargue auth antes de redirigir */}
+        <Route path="/" element={
+          isLoading
+            ? <div className="min-h-screen flex items-center justify-center bg-gray-light">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            : <Navigate to={isAuthenticated ? defaultPath : '/login'} replace />
+        } />
+        <Route path="*" element={
+          isLoading
+            ? <div className="min-h-screen flex items-center justify-center bg-gray-light">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            : <Navigate to={isAuthenticated ? defaultPath : '/login'} replace />
+        } />
       </Routes>
     </Suspense>
   )
