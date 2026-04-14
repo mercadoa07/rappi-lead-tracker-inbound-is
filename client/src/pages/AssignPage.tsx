@@ -110,23 +110,25 @@ export default function AssignPage() {
   const [sourceFilter,     setSourceFilter]     = useState<SourceFilter>('Todos')
   const [page,             setPage]             = useState(1)
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'unassigned' | 'assigned'>('unassigned')
+  const [ownerFilter,      setOwnerFilter]      = useState('')
 
   const [selected,    setSelected]    = useState<Set<string>>(new Set())
   const [bulkHunter,  setBulkHunter]  = useState('')
   const [assigning,   setAssigning]   = useState(false)
 
   // Reset page when filters change
-  useEffect(() => { setPage(1) }, [search, country, sourceFilter, assignmentFilter])
+  useEffect(() => { setPage(1) }, [search, country, sourceFilter, assignmentFilter, ownerFilter])
 
   const { data, isLoading } = useLeads({
-    search:    search  || undefined,
-    country:   country || undefined,
-    source:    sourceFilter !== 'Todos' ? sourceFilter : undefined,
-    assigned:  assignmentFilter === 'all' ? undefined : assignmentFilter,
+    search:       search  || undefined,
+    country:      country || undefined,
+    source:       sourceFilter !== 'Todos' ? sourceFilter : undefined,
+    assigned:     assignmentFilter === 'all' ? undefined : assignmentFilter,
+    assignedToId: ownerFilter || undefined,
     page,
-    limit:     20,
-    sortBy:    'assignedAt',
-    sortOrder: 'desc',
+    limit:        20,
+    sortBy:       'assignedAt',
+    sortOrder:    'desc',
   })
 
   const { data: hunters = [] } = useMyHunters(sourceFilter)
@@ -241,7 +243,7 @@ export default function AssignPage() {
         ))}
       </div>
 
-      {/* Search + country */}
+      {/* Search + country + owner */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[180px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -274,6 +276,20 @@ export default function AssignPage() {
             ))}
           </select>
         )}
+
+        {/* Owner filter */}
+        <select
+          value={ownerFilter}
+          onChange={(e) => setOwnerFilter(e.target.value)}
+          className="h-9 px-3 rounded-xl border border-gray-medium text-sm text-dark bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+        >
+          <option value="">Todos los propietarios</option>
+          {hunters.map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.fullName} ({h.country})
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Table */}

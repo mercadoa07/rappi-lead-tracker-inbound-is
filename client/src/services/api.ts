@@ -148,6 +148,7 @@ export const leadsApi = {
     source?:          LeadSource
     opsZone?:         string
     assigned?:        'all' | 'assigned' | 'unassigned'
+    assignedToId?:    string
     dateFrom?:        string
     dateTo?:          string
     page:             number
@@ -179,6 +180,7 @@ export const leadsApi = {
     if (filters.country)              query = query.eq('country', filters.country)
     if (filters.source)        query = query.eq('source', filters.source)
     if (filters.opsZone)       query = query.ilike('ops_zone', `%${filters.opsZone}%`)
+    if (filters.assignedToId)  query = query.eq('assigned_to_id', filters.assignedToId)
     if (filters.dateFrom)      query = query.gte('assigned_at', filters.dateFrom)
     if (filters.dateTo)        query = query.lte('assigned_at', filters.dateTo)
 
