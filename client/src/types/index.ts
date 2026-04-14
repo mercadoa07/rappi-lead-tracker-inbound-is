@@ -73,6 +73,7 @@ export interface Lead {
   motivoDescarte?:        string
   negociacionExitosa:     boolean
   ultimaFechaContacto?:   string
+  nextContactAt?:         string
   reassignmentCount:      number
   isDeleted:              boolean
   createdAt:              string
@@ -85,7 +86,7 @@ export interface ContactAttempt {
   id:            string
   leadId:        string
   attemptNumber: number
-  contactMethod: ContactMethod
+  contactMethod: string
   result:        ContactResult
   contactedAt:   string
   notes?:        string

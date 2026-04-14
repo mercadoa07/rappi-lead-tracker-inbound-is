@@ -3,18 +3,28 @@ import type { FunnelStage, Country } from '../types'
 // ─── Stage machine ────────────────────────────────────────────────────────────
 
 export const STAGE_TRANSITIONS: Record<FunnelStage, FunnelStage[]> = {
-  SIN_CONTACTO:         ['CONTACTO_FALLIDO', 'CONTACTO_EFECTIVO', 'DESCARTADO'],
+  SIN_CONTACTO:         [],  // hunters solo registran intentos de contacto; auto-transición vía resultado
   CONTACTO_FALLIDO:     ['CONTACTO_EFECTIVO', 'DESCARTADO'],
-  CONTACTO_EFECTIVO:    ['EN_GESTION', 'PROPUESTA_ENVIADA', 'ESPERANDO_DOCUMENTOS', 'OB', 'OK_R2S', 'DESCARTADO'],
+  CONTACTO_EFECTIVO:    ['PROPUESTA_ENVIADA', 'DESCARTADO'],
   EN_GESTION:           ['PROPUESTA_ENVIADA', 'ESPERANDO_DOCUMENTOS', 'EN_FIRMA', 'OB', 'OK_R2S', 'DESCARTADO'],
-  PROPUESTA_ENVIADA:    ['ESPERANDO_DOCUMENTOS', 'EN_FIRMA', 'OB', 'OK_R2S', 'DESCARTADO'],
-  ESPERANDO_DOCUMENTOS: ['EN_FIRMA', 'OB', 'OK_R2S', 'DESCARTADO'],
-  EN_FIRMA:             ['OB', 'OK_R2S', 'DESCARTADO'],
+  PROPUESTA_ENVIADA:    ['ESPERANDO_DOCUMENTOS', 'DESCARTADO'],
+  ESPERANDO_DOCUMENTOS: ['EN_FIRMA', 'DESCARTADO'],
+  EN_FIRMA:             ['OB', 'DESCARTADO'],
   OB:                   ['OK_R2S', 'DESCARTADO'],
   OK_R2S:               [],
   VENTA:                [],
   DESCARTADO:           [],
 }
+
+export const DISCARD_REASONS: string[] = [
+  'Ilocalizado',
+  'Dejó de contestar',
+  'No contesta',
+  'Ya está en Rappi',
+  'No interesado',
+  'No es restaurante',
+  'Fuera de cobertura',
+]
 
 const ALL_STAGES: FunnelStage[] = [
   'SIN_CONTACTO', 'CONTACTO_FALLIDO', 'CONTACTO_EFECTIVO', 'EN_GESTION',
@@ -30,7 +40,7 @@ export const ADMIN_STAGE_TRANSITIONS: Record<FunnelStage, FunnelStage[]> = Objec
 
 export const STAGE_LABEL: Record<FunnelStage, string> = {
   SIN_CONTACTO:         'Sin Contacto',
-  CONTACTO_FALLIDO:     'C. Fallido',
+  CONTACTO_FALLIDO:     'Int. Contacto',
   CONTACTO_EFECTIVO:    'C. Efectivo',
   EN_GESTION:           'En Gestión',
   PROPUESTA_ENVIADA:    'Prop. Enviada',

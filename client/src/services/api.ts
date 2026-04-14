@@ -60,6 +60,7 @@ export function mapLead(row: any): Lead {
     motivoDescarte:        row.motivo_descarte     ?? undefined,
     negociacionExitosa:    row.negociacion_exitosa ?? false,
     ultimaFechaContacto:   row.ultima_fecha_contacto ?? undefined,
+    nextContactAt:         row.next_contact_at       ?? undefined,
     reassignmentCount:     row.reassignment_count   ?? 0,
     isDeleted:             row.is_deleted          ?? false,
     createdAt:             row.created_at,
@@ -267,10 +268,11 @@ export const contactsApi = {
   createContact: async (
     leadId: string,
     body: {
-      contactMethod: string
-      result:        ContactResult
-      notes?:        string
-      contactedAt?:  string
+      contactMethod:  string
+      result:         ContactResult
+      notes?:         string
+      contactedAt?:   string
+      nextContactAt?: string
     },
   ) => {
     // Verificar cuántos intentos ya existen
@@ -311,12 +313,14 @@ export const contactsApi = {
 
     // Actualizar flags en el lead
     const isEfectivo = body.result === 'EFECTIVO'
-    await supabase.from('leads').update({
+    const leadPatch: Record<string, unknown> = {
       tiene_intento_contacto:  true,
-      tiene_contacto_efectivo: isEfectivo ? true : undefined,
       ultima_fecha_contacto:   body.contactedAt ?? new Date().toISOString(),
       updated_at:              new Date().toISOString(),
-    }).eq('id', leadId)
+    }
+    if (isEfectivo) leadPatch.tiene_contacto_efectivo = true
+    if (body.nextContactAt) leadPatch.next_contact_at = body.nextContactAt
+    await supabase.from('leads').update(leadPatch).eq('id', leadId)
 
     return mapContactAttempt(data)
   },
@@ -346,7 +350,7 @@ export const contactsApi = {
 // ─── stageApi ─────────────────────────────────────────────────────────────────
 
 export const stageApi = {
-  transitionStage: async (leadId: string, newStage: FunnelStage, motivoDescarte?: string) => {
+  transitionStage: async (leadId: string, newStage: FunnelStage, motivoDescarte?: string, nextContactAt?: string) => {
     const { data: session } = await supabase.auth.getUser()
     const userId = session.user?.id
     if (!userId) throw new Error('Not authenticated')
@@ -361,16 +365,19 @@ export const stageApi = {
 
     const isDescartado = newStage === 'DESCARTADO'
 
+    const stagePatch: Record<string, unknown> = {
+      current_stage:    newStage,
+      stage_changed_at: new Date().toISOString(),
+      fecha_estado:     new Date().toISOString(),
+      bloqueado:        isDescartado,
+      motivo_descarte:  isDescartado ? (motivoDescarte ?? null) : null,
+      negociacion_exitosa: ['OK_R2S', 'VENTA'].includes(newStage),
+    }
+    if (nextContactAt) stagePatch.next_contact_at = nextContactAt
+
     const { error: updateErr } = await supabase
       .from('leads')
-      .update({
-        current_stage:    newStage,
-        stage_changed_at: new Date().toISOString(),
-        fecha_estado:     new Date().toISOString(),
-        bloqueado:        isDescartado,
-        motivo_descarte:  isDescartado ? (motivoDescarte ?? null) : null,
-        negociacion_exitosa: ['OK_R2S', 'VENTA'].includes(newStage),
-      })
+      .update(stagePatch)
       .eq('id', leadId)
 
     if (updateErr) throw updateErr

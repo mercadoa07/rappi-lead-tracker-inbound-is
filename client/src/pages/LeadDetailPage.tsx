@@ -11,16 +11,17 @@ import { toast } from 'sonner'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { leadsApi, contactsApi, stageApi, reassignApi } from '../services/api'
 import { cn } from '../utils/cn'
-import { STAGE_LABEL, STAGE_COLORS, STAGE_TRANSITIONS, ADMIN_STAGE_TRANSITIONS, COUNTRY_FLAG } from '../utils/constants'
+import { STAGE_LABEL, STAGE_COLORS, STAGE_TRANSITIONS, ADMIN_STAGE_TRANSITIONS, COUNTRY_FLAG, DISCARD_REASONS } from '../utils/constants'
 import { useAuth } from '../context/AuthContext'
 import type { Lead, ContactAttempt, StageHistory, FunnelStage, LeadSource, Reassignment } from '../types'
 import type { ContactResult, ContactMethod } from '../types'
+// ContactMethod still used for display labels; contactAttempt.contactMethod is now string
 
 // ─── Local label helpers ──────────────────────────────────────────────────────
 
 const STAGE_LABEL_FULL: Record<FunnelStage, string> = {
   SIN_CONTACTO:         'Sin Contacto',
-  CONTACTO_FALLIDO:     'Contacto Fallido',
+  CONTACTO_FALLIDO:     'Intento de Contacto',
   CONTACTO_EFECTIVO:    'Contacto Efectivo',
   EN_GESTION:           'En Gestión',
   PROPUESTA_ENVIADA:    'Propuesta Enviada',
@@ -263,35 +264,92 @@ function fmtDate(iso: string, pattern = "d 'de' MMMM 'de' yyyy") {
 
 // ─── Contact Modal (inline) ───────────────────────────────────────────────────
 
+const WA_ICON = (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+  </svg>
+)
+
 function ContactModal({
   leadId,
+  currentStage,
   contactNumber,
   onClose,
   onSuccess,
 }: {
   leadId:        string
+  currentStage:  FunnelStage
   contactNumber: number
   onClose:       () => void
   onSuccess:     () => void
 }) {
   const queryClient = useQueryClient()
-  const [method,      setMethod]      = useState<ContactMethod>('LLAMADA')
-  const [result,      setResult]      = useState<ContactResult>('EFECTIVO')
-  const [notes,       setNotes]       = useState('')
-  const [contactedAt, setContactedAt] = useState(() => format(new Date(), "yyyy-MM-dd'T'HH:mm"))
+  // Multi-method checkboxes
+  const [methods,       setMethods]       = useState<Set<ContactMethod>>(new Set(['LLAMADA']))
+  const [result,        setResult]        = useState<ContactResult>('EFECTIVO')
+  const [notes,         setNotes]         = useState('')
+  const [contactedAt,   setContactedAt]   = useState(() => format(new Date(), "yyyy-MM-dd'T'HH:mm"))
+  const [nextContactAt, setNextContactAt] = useState('')
+  // Popup after efectivo contact
+  const [efectivoPopup, setEfectivoPopup] = useState(false)
+  const [transitioning, setTransitioning] = useState(false)
+
+  const toggleMethod = (m: ContactMethod) => {
+    setMethods(prev => {
+      const next = new Set(prev)
+      if (next.has(m) && next.size === 1) return next  // keep at least one
+      next.has(m) ? next.delete(m) : next.add(m)
+      return next
+    })
+  }
 
   const mutation = useMutation({
     mutationFn: () =>
       contactsApi.createContact(leadId, {
-        contactMethod: method,
+        contactMethod:  Array.from(methods).join(','),
         result,
-        notes:       notes.trim() || undefined,
-        contactedAt: new Date(contactedAt).toISOString(),
+        notes:          notes.trim() || undefined,
+        contactedAt:    new Date(contactedAt).toISOString(),
+        nextContactAt:  nextContactAt ? new Date(nextContactAt).toISOString() : undefined,
       }),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['lead', leadId] })
       toast.success(`Contacto ${contactNumber} registrado`)
       onSuccess()
+
+      // Auto-transition for SIN_CONTACTO
+      if (currentStage === 'SIN_CONTACTO') {
+        if (result === 'EFECTIVO') {
+          setTransitioning(true)
+          try {
+            await stageApi.transitionStage(leadId, 'CONTACTO_EFECTIVO')
+            queryClient.invalidateQueries({ queryKey: ['lead', leadId] })
+            queryClient.invalidateQueries({ queryKey: ['leads-kanban'] })
+          } finally {
+            setTransitioning(false)
+          }
+          setEfectivoPopup(true)
+          return
+        } else {
+          // FALLIDO or OCUPADO → CONTACTO_FALLIDO
+          try {
+            await stageApi.transitionStage(leadId, 'CONTACTO_FALLIDO')
+            queryClient.invalidateQueries({ queryKey: ['lead', leadId] })
+            queryClient.invalidateQueries({ queryKey: ['leads-kanban'] })
+          } catch { /* ignore */ }
+        }
+      } else if ((currentStage === 'CONTACTO_FALLIDO') && result === 'EFECTIVO') {
+        setTransitioning(true)
+        try {
+          await stageApi.transitionStage(leadId, 'CONTACTO_EFECTIVO')
+          queryClient.invalidateQueries({ queryKey: ['lead', leadId] })
+          queryClient.invalidateQueries({ queryKey: ['leads-kanban'] })
+        } finally {
+          setTransitioning(false)
+        }
+        setEfectivoPopup(true)
+        return
+      }
       onClose()
     },
     onError: (err: unknown) => {
@@ -300,11 +358,72 @@ function ContactModal({
     },
   })
 
+  const handleEfectivoResult = async (choice: 'interesado' | 'no_interesado' | 'ya_en_rappi') => {
+    if (choice !== 'interesado') {
+      const motivo = choice === 'ya_en_rappi' ? 'Ya está en Rappi' : 'No interesado'
+      try {
+        await stageApi.transitionStage(leadId, 'DESCARTADO', motivo)
+        queryClient.invalidateQueries({ queryKey: ['lead', leadId] })
+        queryClient.invalidateQueries({ queryKey: ['leads-kanban'] })
+        toast.success(`Lead descartado: ${motivo}`)
+      } catch {
+        toast.error('Error al descartar lead')
+      }
+    } else {
+      toast.success('Lead en Contacto Efectivo — listo para avanzar')
+    }
+    setEfectivoPopup(false)
+    onClose()
+  }
+
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !efectivoPopup) onClose() }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [onClose])
+  }, [onClose, efectivoPopup])
+
+  // Efectivo popup (step 2)
+  if (efectivoPopup) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center shrink-0">
+              <CheckCircle2 size={20} className="text-green-500" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-900">¿Resultado del contacto efectivo?</h3>
+              <p className="text-sm text-gray-400 mt-1">El lead fue contactado exitosamente</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <button
+              onClick={() => handleEfectivoResult('interesado')}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-green-200 bg-green-50 text-green-700 text-sm font-semibold hover:bg-green-100 transition-colors"
+            >
+              <CheckCircle2 size={16} />
+              Interesado
+            </button>
+            <button
+              onClick={() => handleEfectivoResult('no_interesado')}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 transition-colors"
+            >
+              <XCircle size={16} />
+              No interesado → Descartar
+            </button>
+            <button
+              onClick={() => handleEfectivoResult('ya_en_rappi')}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-orange-200 bg-orange-50 text-orange-700 text-sm font-semibold hover:bg-orange-100 transition-colors"
+            >
+              <AlertTriangle size={16} />
+              Ya está en Rappi → Descartar
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -324,31 +443,27 @@ function ContactModal({
           </button>
         </div>
 
-        {/* Contact method */}
+        {/* Contact method (multi-select checkboxes) */}
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">
-            Medio de contacto
+            Medio de contacto <span className="normal-case font-normal text-gray-400">(uno o varios)</span>
           </p>
           <div className="grid grid-cols-3 gap-2">
             {(['LLAMADA', 'WHATSAPP', 'CORREO'] as ContactMethod[]).map((m) => (
               <button
                 key={m}
                 type="button"
-                onClick={() => setMethod(m)}
+                onClick={() => toggleMethod(m)}
                 className={cn(
                   'flex items-center justify-center gap-1.5 p-3 rounded-xl border-2 text-sm font-semibold transition-all',
-                  method === m
+                  methods.has(m)
                     ? 'border-blue-500 bg-blue-50 text-blue-600'
                     : 'border-gray-200 text-gray-500 hover:border-gray-300',
                 )}
               >
-                {m === 'LLAMADA'   && <Phone size={14} />}
-                {m === 'WHATSAPP'  && (
-                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                  </svg>
-                )}
-                {m === 'CORREO'    && <Mail size={14} />}
+                {m === 'LLAMADA'  && <Phone size={14} />}
+                {m === 'WHATSAPP' && WA_ICON}
+                {m === 'CORREO'   && <Mail size={14} />}
                 {CONTACT_METHOD_LABEL[m]}
               </button>
             ))}
@@ -386,13 +501,27 @@ function ContactModal({
         {/* Datetime */}
         <div>
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5 block">
-            Fecha y hora
+            Fecha y hora del contacto
           </label>
           <input
             type="datetime-local"
             value={contactedAt}
             max={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
             onChange={(e) => setContactedAt(e.target.value)}
+            className="w-full h-9 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 transition"
+          />
+        </div>
+
+        {/* Próxima fecha de contacto */}
+        <div>
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5 block">
+            Próxima fecha de contacto <span className="text-gray-400 normal-case font-normal">(opcional)</span>
+          </label>
+          <input
+            type="datetime-local"
+            value={nextContactAt}
+            min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+            onChange={(e) => setNextContactAt(e.target.value)}
             className="w-full h-9 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 transition"
           />
         </div>
@@ -405,7 +534,7 @@ function ContactModal({
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            rows={3}
+            rows={2}
             placeholder="Observaciones del intento de contacto..."
             className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 transition"
           />
@@ -421,10 +550,10 @@ function ContactModal({
           </button>
           <button
             onClick={() => mutation.mutate()}
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || transitioning}
             className="flex-1 h-10 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
+            {(mutation.isPending || transitioning) && <Loader2 size={14} className="animate-spin" />}
             Guardar
           </button>
         </div>
@@ -450,6 +579,7 @@ function ConfirmDialog({
   onCancel:        () => void
   isPending:       boolean
 }) {
+  const canConfirm = stage !== 'DESCARTADO' || motivoDescarte !== ''
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
@@ -469,15 +599,18 @@ function ConfirmDialog({
         {stage === 'DESCARTADO' && (
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">
-              Motivo de descarte <span className="text-gray-400">(opcional)</span>
+              Causal de descarte <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
+            <select
               value={motivoDescarte}
               onChange={(e) => onMotivoChange(e.target.value)}
-              placeholder="Ej: No le interesa, Fuera de cobertura..."
-              className="w-full h-9 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-red-400"
-            />
+              className="w-full h-9 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-red-400 bg-white"
+            >
+              <option value="">Selecciona una causal...</option>
+              {DISCARD_REASONS.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
           </div>
         )}
         <div className="flex gap-2 pt-1">
@@ -489,7 +622,7 @@ function ConfirmDialog({
           </button>
           <button
             onClick={onConfirm}
-            disabled={isPending}
+            disabled={isPending || !canConfirm}
             className="flex-1 h-10 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {isPending && <Loader2 size={14} className="animate-spin" />}
@@ -809,6 +942,7 @@ function ContactTimeline({ lead }: { lead: LeadDetail }) {
       {modalSlot !== null && (
         <ContactModal
           leadId={lead.id}
+          currentStage={lead.currentStage}
           contactNumber={modalSlot}
           onClose={() => setModalSlot(null)}
           onSuccess={() => queryClient.invalidateQueries({ queryKey: ['lead', lead.id] })}
@@ -831,30 +965,39 @@ function StageCard({
   const [confirm,        setConfirm]        = useState(false)
   const [dropOpen,       setDropOpen]       = useState(false)
   const [motivoDescarte, setMotivoDescarte] = useState('')
+  const [nextContactAt,  setNextContactAt]  = useState('')
+  const [advanceDialog,  setAdvanceDialog]  = useState(false)
   const dropRef = useRef<HTMLDivElement>(null)
 
   const currentStage  = lead.currentStage
+  const isHunter      = user?.role === 'HUNTER'
   const transitionMap = (user?.role === 'ADMIN' || user?.role === 'LIDER') ? ADMIN_STAGE_TRANSITIONS : STAGE_TRANSITIONS
   const transitions   = transitionMap[currentStage] ?? []
-  const isTerminal    = transitions.length === 0
+  // For hunter in SIN_CONTACTO: no manual stage change allowed
+  const isLockedForHunter = isHunter && currentStage === 'SIN_CONTACTO'
+  const isTerminal    = transitions.length === 0 && !isLockedForHunter
 
   const mutation = useMutation({
-    mutationFn: ({ stage, motivo }: { stage: FunnelStage; motivo?: string }) =>
-      stageApi.transitionStage(lead.id, stage, motivo),
+    mutationFn: ({ stage, motivo, nca }: { stage: FunnelStage; motivo?: string; nca?: string }) =>
+      stageApi.transitionStage(lead.id, stage, motivo, nca),
     onSuccess: (_data, { stage: newStage }) => {
       queryClient.invalidateQueries({ queryKey: ['lead', lead.id] })
       queryClient.invalidateQueries({ queryKey: ['leads-kanban'] })
       toast.success(`Etapa cambiada a ${STAGE_LABEL_FULL[newStage]}`)
       setSelected('')
       setConfirm(false)
+      setAdvanceDialog(false)
       setMotivoDescarte('')
+      setNextContactAt('')
     },
     onError: (err: unknown) => {
       const msg = (err as Error)?.message ?? 'Error al cambiar etapa'
       toast.error(msg)
       setSelected('')
       setConfirm(false)
+      setAdvanceDialog(false)
       setMotivoDescarte('')
+      setNextContactAt('')
     },
   })
 
@@ -872,6 +1015,10 @@ function StageCard({
     setDropOpen(false)
     if (stage === 'DESCARTADO') {
       setConfirm(true)
+    } else if (isHunter) {
+      // Hunter must provide next contact date when advancing
+      setNextContactAt('')
+      setAdvanceDialog(true)
     } else {
       mutation.mutate({ stage })
     }
@@ -893,7 +1040,12 @@ function StageCard({
             <StageBadge stage={currentStage} size="lg" />
           </div>
 
-          {isTerminal ? (
+          {isLockedForHunter ? (
+            <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 rounded-xl px-4 py-3">
+              <Phone size={14} className="shrink-0" />
+              Registra un intento de contacto para avanzar automáticamente
+            </div>
+          ) : isTerminal ? (
             <div className="flex items-center gap-2 text-sm text-gray-400 bg-gray-50 rounded-xl px-4 py-3">
               <Check size={14} className="text-green-500 shrink-0" />
               Etapa final --- no se puede modificar
@@ -950,6 +1102,52 @@ function StageCard({
           )}
         </div>
       </div>
+
+      {/* Advance stage dialog (hunter — requires próxima fecha de contacto) */}
+      {advanceDialog && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setAdvanceDialog(false); setSelected('') }} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                <Calendar size={20} className="text-blue-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Avanzar a {STAGE_LABEL_FULL[selected as FunnelStage]}</h3>
+                <p className="text-sm text-gray-400 mt-1">Indica cuándo será el próximo contacto</p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Próxima fecha de contacto <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={nextContactAt}
+                min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+                onChange={(e) => setNextContactAt(e.target.value)}
+                className="w-full h-9 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => { setAdvanceDialog(false); setSelected('') }}
+                className="flex-1 h-10 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => mutation.mutate({ stage: selected as FunnelStage, nca: nextContactAt ? new Date(nextContactAt).toISOString() : undefined })}
+                disabled={mutation.isPending || !nextContactAt}
+                className="flex-1 h-10 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirm && selected && (
         <ConfirmDialog
