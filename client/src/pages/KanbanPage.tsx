@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   DndContext,
@@ -21,19 +21,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { leadsApi, stageApi } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { cn } from '../utils/cn'
-import { STAGE_LABEL, STAGE_COLORS, STAGE_TRANSITIONS, BLOCKED_STAGES } from '../utils/constants'
+import { STAGE_LABEL, STAGE_COLORS, STAGE_TRANSITIONS, ADMIN_STAGE_TRANSITIONS } from '../utils/constants'
 import type { Lead, FunnelStage, LeadSource } from '../types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+// Etapas que se muestran como columnas en el Kanban
+// OK_R2S y DESCARTADO se muestran como contadores, no como columnas
 const ACTIVE_STAGES: FunnelStage[] = [
   'SIN_CONTACTO',
   'CONTACTO_FALLIDO',
   'CONTACTO_EFECTIVO',
   'PROPUESTA_ENVIADA',
   'ESPERANDO_DOCUMENTOS',
+  'EN_FIRMA',
   'OB',
-  'OK_R2S',
 ]
 
 // ─── Confirm dialog ───────────────────────────────────────────────────────────
@@ -58,7 +60,7 @@ function ConfirmBlockedDialog({
             <AlertTriangle size={20} className="text-red-600" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-gray-900">Confirmar bloqueo?</h3>
+            <h3 className="text-base font-bold text-gray-900">Confirmar descarte?</h3>
             <p className="text-sm text-gray-400 mt-1">
               Moverás el lead de <span className="font-semibold text-gray-900">{STAGE_LABEL[fromStage]}</span> a{' '}
               <span className="font-semibold text-red-600">{STAGE_LABEL[toStage]}</span>.
@@ -101,7 +103,7 @@ function MiniSourceBadge({ source }: { source: LeadSource }) {
 
 // ─── Lead card ────────────────────────────────────────────────────────────────
 
-function LeadCard({ lead, isDragging = false }: { lead: Lead; isDragging?: boolean }) {
+const LeadCard = memo(function LeadCard({ lead, isDragging = false }: { lead: Lead; isDragging?: boolean }) {
   const navigate    = useNavigate()
   const daysInStage = differenceInDays(new Date(), parseISO(lead.stageChangedAt))
   const stale       = daysInStage > 2
@@ -144,11 +146,11 @@ function LeadCard({ lead, isDragging = false }: { lead: Lead; isDragging?: boole
       </div>
     </div>
   )
-}
+})
 
 // ─── Draggable card ───────────────────────────────────────────────────────────
 
-function DraggableCard({ lead }: { lead: Lead }) {
+const DraggableCard = memo(function DraggableCard({ lead }: { lead: Lead }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id })
 
   return (
@@ -156,7 +158,7 @@ function DraggableCard({ lead }: { lead: Lead }) {
       <LeadCard lead={lead} isDragging={isDragging} />
     </div>
   )
-}
+})
 
 // ─── Kanban column (desktop) ──────────────────────────────────────────────────
 
@@ -165,14 +167,17 @@ function KanbanColumn({
   leads,
   isOver,
   canDrop,
+  totalCount,
 }: {
-  stage:   FunnelStage
-  leads:   Lead[]
-  isOver:  boolean
-  canDrop: boolean
+  stage:       FunnelStage
+  leads:       Lead[]
+  isOver:      boolean
+  canDrop:     boolean
+  totalCount?: number
 }) {
   const { setNodeRef } = useDroppable({ id: stage })
   const colors = STAGE_COLORS[stage]
+  const displayCount = totalCount ?? leads.length
 
   return (
     <div
@@ -190,7 +195,7 @@ function KanbanColumn({
           {STAGE_LABEL[stage]}
         </span>
         <span className={cn('text-xs font-bold px-1.5 py-0.5 rounded-full bg-white/70', colors.text)}>
-          {leads.length}
+          {displayCount.toLocaleString()}
         </span>
       </div>
 
@@ -202,6 +207,11 @@ function KanbanColumn({
         {leads.length === 0 && (
           <div className="flex items-center justify-center h-16 text-xs text-gray-300 italic">
             Sin leads
+          </div>
+        )}
+        {totalCount !== undefined && totalCount > leads.length && (
+          <div className="text-center text-[10px] text-gray-400 italic py-1">
+            mostrando {leads.length} de {totalCount.toLocaleString()}
           </div>
         )}
       </div>
@@ -288,34 +298,63 @@ export default function KanbanPage() {
   const [overStage, setOverStage] = useState<FunnelStage | null>(null)
 
   // ── Fetch leads ──────────────────────────────────────────────────────────────
-  const { data: kanbanData, isLoading } = useQuery({
-    queryKey: ['leads-kanban', source, search],
+  // Pipeline + R2S + Descartado (separate from SIN_CONTACTO to avoid limit issues)
+  const { data: pipelineData, isLoading: loadingPipeline } = useQuery({
+    queryKey: ['kanban', 'pipeline', source, search],
     queryFn:  () =>
       leadsApi.getLeads({
         search:  search || undefined,
         source:  source !== 'ALL' ? source : undefined,
+        stage:   ['CONTACTO_FALLIDO', 'CONTACTO_EFECTIVO', 'EN_GESTION',
+                  'PROPUESTA_ENVIADA', 'ESPERANDO_DOCUMENTOS', 'EN_FIRMA', 'OB',
+                  'OK_R2S', 'DESCARTADO'],
         page:    1,
         limit:   10000,
       }),
-    select: (res) => res.data,
+    select:    (res) => res.data,
+    staleTime: 2 * 60_000,
   })
 
-  const allLeads: Lead[] = kanbanData ?? []
+  // SIN_CONTACTO fetched separately with a small card limit — total is still exact
+  const { data: sinContactoResp, isLoading: loadingSinContacto } = useQuery({
+    queryKey:  ['kanban', 'sin-contacto', source, search],
+    queryFn:   () =>
+      leadsApi.getLeads({
+        search:  search || undefined,
+        source:  source !== 'ALL' ? source : undefined,
+        stage:   ['SIN_CONTACTO'],
+        page:    1,
+        limit:   100,
+      }),
+    staleTime: 2 * 60_000,
+  })
+
+  const sinContactoLeads = sinContactoResp?.data   ?? []
+  const sinContactoTotal = sinContactoResp?.total  ?? 0
+
+  const isLoading = loadingPipeline || loadingSinContacto
+  const allLeads: Lead[] = useMemo(
+    () => [...(pipelineData ?? []), ...sinContactoLeads],
+    [pipelineData, sinContactoLeads],
+  )
 
   // ── Group by stage ───────────────────────────────────────────────────────────
   const byStage = useMemo(() => {
     const map: Record<FunnelStage, Lead[]> = {} as Record<FunnelStage, Lead[]>
-    for (const s of [...ACTIVE_STAGES, ...BLOCKED_STAGES]) map[s] = []
+    for (const s of [...ACTIVE_STAGES, 'OK_R2S' as FunnelStage, 'DESCARTADO' as FunnelStage]) map[s] = []
     for (const lead of allLeads) {
-      if (map[lead.currentStage]) map[lead.currentStage].push(lead)
+      if (map[lead.currentStage] !== undefined) {
+        map[lead.currentStage].push(lead)
+      } else {
+        console.warn(`[Kanban] stage inesperado: ${lead.currentStage} (lead ${lead.id})`)
+      }
     }
     return map
   }, [allLeads])
 
-  const blockedCount = useMemo(
-    () => BLOCKED_STAGES.reduce((sum, s) => sum + (byStage[s]?.length ?? 0), 0),
-    [byStage],
-  )
+  const descartadoCount = useMemo(() => byStage['DESCARTADO']?.length ?? 0, [byStage])
+  const r2sCount        = useMemo(() => byStage['OK_R2S']?.length ?? 0,     [byStage])
+  const blockedCount    = descartadoCount
 
   // ── Active drag lead ─────────────────────────────────────────────────────────
   const activeLead = activeId ? allLeads.find((l) => l.id === activeId) ?? null : null
@@ -336,7 +375,7 @@ export default function KanbanPage() {
       stageApi.transitionStage(leadId, toStage),
     onSuccess: (_data, { toStage }) => {
       toast.success(`Movido a ${STAGE_LABEL[toStage]}`)
-      queryClient.invalidateQueries({ queryKey: ['leads-kanban'] })
+      queryClient.invalidateQueries({ queryKey: ['kanban'] })
     },
     onError: (err: unknown) => {
       const msg = (err as Error)?.message ?? 'Error al cambiar etapa'
@@ -354,14 +393,15 @@ export default function KanbanPage() {
 
     if (!lead || lead.currentStage === toStage) return
 
-    const allowed = STAGE_TRANSITIONS[lead.currentStage] ?? []
+    const transitionMap = (user?.role === 'ADMIN' || user?.role === 'LIDER') ? ADMIN_STAGE_TRANSITIONS : STAGE_TRANSITIONS
+    const allowed = transitionMap[lead.currentStage] ?? []
     if (!allowed.includes(toStage)) {
       toast.error(`Transición no permitida: ${STAGE_LABEL[lead.currentStage]} → ${STAGE_LABEL[toStage]}`)
       return
     }
 
-    // Blocked stages need confirmation
-    if (BLOCKED_STAGES.includes(toStage)) {
+    // DESCARTADO needs confirmation
+    if (toStage === 'DESCARTADO') {
       setPendingMove({ leadId: lead.id, fromStage: lead.currentStage, toStage })
       return
     }
@@ -372,7 +412,8 @@ export default function KanbanPage() {
   // ── Can drop check ───────────────────────────────────────────────────────────
   const canDropOnOver = useMemo(() => {
     if (!activeLead || !overStage) return false
-    const allowed = STAGE_TRANSITIONS[activeLead.currentStage] ?? []
+    const transitionMap = (user?.role === 'ADMIN' || user?.role === 'LIDER') ? ADMIN_STAGE_TRANSITIONS : STAGE_TRANSITIONS
+    const allowed = transitionMap[activeLead.currentStage] ?? []
     return allowed.includes(overStage)
   }, [activeLead, overStage])
 
@@ -454,6 +495,7 @@ export default function KanbanPage() {
                   leads={byStage[stage] ?? []}
                   isOver={overStage === stage}
                   canDrop={canDropOnOver}
+                  totalCount={stage === 'SIN_CONTACTO' ? sinContactoTotal : undefined}
                 />
               ))}
 
@@ -474,15 +516,22 @@ export default function KanbanPage() {
             ))}
           </div>
 
-          {/* Blocked counter */}
-          {blockedCount > 0 && (
-            <div className="shrink-0 mt-3 flex items-center gap-2 text-sm text-gray-400 border-t border-gray-100 pt-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-600 text-xs font-semibold">
-                <AlertTriangle size={12} />
-                {blockedCount} lead{blockedCount !== 1 ? 's' : ''} bloqueado{blockedCount !== 1 ? 's' : ''}
-              </span>
+          {/* Counters for non-column stages */}
+          {(r2sCount > 0 || descartadoCount > 0) && (
+            <div className="shrink-0 mt-3 flex items-center gap-3 flex-wrap border-t border-gray-100 pt-3">
+              {r2sCount > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-semibold">
+                  ✓ {r2sCount} OK R2S
+                </span>
+              )}
+              {descartadoCount > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-600 text-xs font-semibold">
+                  <AlertTriangle size={12} />
+                  {descartadoCount} descartado{descartadoCount !== 1 ? 's' : ''}
+                </span>
+              )}
               <span className="text-xs text-gray-400">
-                (no se muestran como columnas — gestionar desde el detalle del lead)
+                (R2S y Descartados no se muestran como columnas — ver desde lista de leads)
               </span>
             </div>
           )}

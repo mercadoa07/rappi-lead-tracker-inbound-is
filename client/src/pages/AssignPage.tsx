@@ -24,16 +24,13 @@ type SourceFilter = 'SDR' | 'SOB' | 'Todos'
 
 // ─── useMyHunters ─────────────────────────────────────────────────────────────
 
-function useMyHunters(source: SourceFilter) {
+function useMyHunters() {
   const { user } = useAuth()
 
   return useQuery<User[]>({
-    queryKey: ['my-hunters-inbound', user?.id, source],
+    queryKey: ['my-hunters-inbound', user?.id],
     queryFn: async () => {
       if (!user?.id) return []
-
-      const sourceFilter: LeadSource | undefined =
-        source === 'Todos' ? undefined : source
 
       let query = supabase
         .from('profiles')
@@ -42,11 +39,53 @@ function useMyHunters(source: SourceFilter) {
         .eq('role', 'HUNTER')
         .order('full_name')
 
-      if (sourceFilter) query = query.eq('team', sourceFilter)
+      // LIDER ve todos los hunters de su mismo país
+      // ADMIN ve todos sin restricción
+      if (user.role === 'LIDER' && user.country) {
+        query = query.eq('country', user.country)
+      }
 
-      // LIDER only sees their own hunters; ADMIN sees all
-      if (user.role === 'LIDER') {
-        query = query.eq('leader_id', user.id)
+      const { data, error } = await query
+      if (error) throw error
+
+      return (data ?? []).map((p) => ({
+        id:          p.id,
+        email:       p.email,
+        fullName:    p.full_name,
+        role:        p.role,
+        country:     p.country as Country,
+        team:        p.team ?? 'SDR',
+        dailyTarget: p.daily_target ?? 4,
+        isActive:    p.is_active ?? true,
+        leaderId:    p.leader_id ?? undefined,
+      } as User))
+    },
+    staleTime: 60_000,
+    enabled: !!user,
+  })
+}
+
+// ─── useOwners (hunters + supervisores) ───────────────────────────────────────
+
+function useOwners() {
+  const { user } = useAuth()
+
+  return useQuery<User[]>({
+    queryKey: ['owners-for-filter', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return []
+
+      // Trae HUNTER y LIDER activos
+      let query = supabase
+        .from('profiles')
+        .select('*')
+        .eq('is_active', true)
+        .in('role', ['HUNTER', 'LIDER'])
+        .order('full_name')
+
+      // LIDER ve todos los del mismo país + sí mismo; ADMIN ve todos
+      if (user.role === 'LIDER' && user.country) {
+        query = query.or(`country.eq.${user.country},id.eq.${user.id}`)
       }
 
       const { data, error } = await query
@@ -110,26 +149,29 @@ export default function AssignPage() {
   const [sourceFilter,     setSourceFilter]     = useState<SourceFilter>('Todos')
   const [page,             setPage]             = useState(1)
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'unassigned' | 'assigned'>('unassigned')
+  const [ownerFilter,      setOwnerFilter]      = useState('')
 
   const [selected,    setSelected]    = useState<Set<string>>(new Set())
   const [bulkHunter,  setBulkHunter]  = useState('')
   const [assigning,   setAssigning]   = useState(false)
 
   // Reset page when filters change
-  useEffect(() => { setPage(1) }, [search, country, sourceFilter, assignmentFilter])
+  useEffect(() => { setPage(1) }, [search, country, sourceFilter, assignmentFilter, ownerFilter])
 
   const { data, isLoading } = useLeads({
-    search:    search  || undefined,
-    country:   country || undefined,
-    source:    sourceFilter !== 'Todos' ? sourceFilter : undefined,
-    assigned:  assignmentFilter === 'all' ? undefined : assignmentFilter,
+    search:       search  || undefined,
+    country:      country || undefined,
+    source:       sourceFilter !== 'Todos' ? sourceFilter : undefined,
+    assigned:     assignmentFilter === 'all' ? undefined : assignmentFilter,
+    assignedToId: ownerFilter || undefined,
     page,
-    limit:     20,
-    sortBy:    'assignedAt',
-    sortOrder: 'desc',
+    limit:        20,
+    sortBy:       'assignedAt',
+    sortOrder:    'desc',
   })
 
-  const { data: hunters = [] } = useMyHunters(sourceFilter)
+  const { data: hunters = [] } = useMyHunters()
+  const { data: owners  = [] } = useOwners()
 
   const leads      = data?.data ?? []
   const totalPages = data?.totalPages ?? 1
@@ -241,7 +283,7 @@ export default function AssignPage() {
         ))}
       </div>
 
-      {/* Search + country */}
+      {/* Search + country + owner */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[180px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -274,6 +316,35 @@ export default function AssignPage() {
             ))}
           </select>
         )}
+
+        {/* Owner filter */}
+        <select
+          value={ownerFilter}
+          onChange={(e) => setOwnerFilter(e.target.value)}
+          className="h-9 px-3 rounded-xl border border-gray-medium text-sm text-dark bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+        >
+          <option value="">Todos los propietarios</option>
+          {owners.filter(o => o.role === 'LIDER').length > 0 && (
+            <>
+              <option disabled>── Supervisores ──</option>
+              {owners.filter(o => o.role === 'LIDER').map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.fullName} ({o.country})
+                </option>
+              ))}
+            </>
+          )}
+          {owners.filter(o => o.role === 'HUNTER').length > 0 && (
+            <>
+              <option disabled>── Comerciales ──</option>
+              {owners.filter(o => o.role === 'HUNTER').map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.fullName} ({o.country})
+                </option>
+              ))}
+            </>
+          )}
+        </select>
       </div>
 
       {/* Table */}

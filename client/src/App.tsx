@@ -20,6 +20,7 @@ const AssignPage        = lazy(() => import('./pages/AssignPage'))
 const ImportPage        = lazy(() => import('./pages/ImportPage'))
 const UsersPage         = lazy(() => import('./pages/UsersPage'))
 const FeedbackPage      = lazy(() => import('./pages/FeedbackPage'))
+const AuthCallbackPage  = lazy(() => import('./pages/AuthCallbackPage'))
 
 // ─── QueryClient ──────────────────────────────────────────────────────────────
 
@@ -75,7 +76,10 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?
   if (!isAuthenticated) return <Navigate to="/login" replace />
 
   if (roles && user && !roles.includes(user.role)) {
-    return <Navigate to="/gestion" replace />
+    // Redirige a la página de inicio correcta según rol en lugar de /gestion
+    // (evita bucle infinito cuando un HUNTER accede a ruta restringida)
+    const fallback = user.role === 'HUNTER' ? '/leads' : '/gestion'
+    return <Navigate to={fallback} replace />
   }
 
   return <>{children}</>
@@ -84,22 +88,24 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 function AppRoutes() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading, user } = useAuth()
+  const defaultPath = (user?.role === 'HUNTER') ? '/leads' : '/gestion'
 
   return (
     <Suspense fallback={<PageFallback />}>
       <Routes>
         {/* Public */}
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route
           path="/login"
-          element={isAuthenticated ? <Navigate to="/gestion" replace /> : <LoginPage />}
+          element={isAuthenticated ? <Navigate to={defaultPath} replace /> : <LoginPage />}
         />
 
-        {/* Dashboard */}
+        {/* Dashboard — solo LIDER / ADMIN */}
         <Route
           path="/gestion"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['LIDER', 'ADMIN']}>
               <Layout><GestionPage /></Layout>
             </ProtectedRoute>
           }
@@ -207,9 +213,21 @@ function AppRoutes() {
           }
         />
 
-        {/* Defaults */}
-        <Route path="/" element={<Navigate to="/gestion" replace />} />
-        <Route path="*" element={<Navigate to="/gestion" replace />} />
+        {/* Defaults — espera a que cargue auth antes de redirigir */}
+        <Route path="/" element={
+          isLoading
+            ? <div className="min-h-screen flex items-center justify-center bg-gray-light">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            : <Navigate to={isAuthenticated ? defaultPath : '/login'} replace />
+        } />
+        <Route path="*" element={
+          isLoading
+            ? <div className="min-h-screen flex items-center justify-center bg-gray-light">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            : <Navigate to={isAuthenticated ? defaultPath : '/login'} replace />
+        } />
       </Routes>
     </Suspense>
   )

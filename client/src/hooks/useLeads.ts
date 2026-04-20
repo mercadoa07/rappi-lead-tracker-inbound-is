@@ -3,18 +3,19 @@ import { leadsApi } from '../services/api'
 import type { FunnelStage, Country, LeadSource } from '../types'
 
 interface UseLeadsParams {
-  search?:    string
-  stage?:     FunnelStage[]
-  country?:   Country
-  source?:    LeadSource
-  opsZone?:   string
-  assigned?:  'all' | 'assigned' | 'unassigned'
-  dateFrom?:  string
-  dateTo?:    string
-  page?:      number
-  limit?:     number
-  sortBy?:    string
-  sortOrder?: 'asc' | 'desc'
+  search?:       string
+  stage?:        FunnelStage[]
+  country?:      Country
+  source?:       LeadSource
+  opsZone?:      string
+  assigned?:     'all' | 'assigned' | 'unassigned'
+  assignedToId?: string
+  dateFrom?:     string
+  dateTo?:       string
+  page?:         number
+  limit?:        number
+  sortBy?:       string
+  sortOrder?:    'asc' | 'desc'
 }
 
 export function useLeads(params: UseLeadsParams = {}) {
